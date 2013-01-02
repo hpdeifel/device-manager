@@ -16,15 +16,13 @@ import UDisks
 
 main :: IO ()
 main = do
-  title <- plainText "Devices:" >>= withPadding (padBottom 2)
-
+  title <- plainText "Devices:"
   lst <- newList def_attr
 
-  layout <- vBox title lst
+  layout <- return title <--> hBorder <--> return lst
   
   fg <- newFocusGroup
   addToFocusGroup fg layout
-  addToFocusGroup fg title
   
   c <- newCollection
   _ <- addToCollection c layout fg

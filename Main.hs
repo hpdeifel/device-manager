@@ -32,7 +32,7 @@ main = do
 
   fg `onKeyPressed` \_ key _ ->
     if key == KASCII 'q' then
-      exitSuccess
+      shutdownUi >> return True
       else return False
 
   lst `onItemActivated` \(ActivateItemEvent _ dev _) -> do

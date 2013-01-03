@@ -34,8 +34,11 @@ data Device = Device {
   mountPoints   :: Maybe [String],
   deviceFile    :: String,
   name          :: String,
+  vendor        :: String,
+  model         :: String,
   internal      :: Bool,
-  hasPartitions :: Bool
+  hasPartitions :: Bool,
+  hasMedia      :: Bool
 } deriving (Show)
 
 data UDisksConnection = UDCon {
@@ -113,20 +116,26 @@ fillInDevice (UDCon client _) path = do
   devFile    <- prop "DeviceFile"
   isMounted  <- prop "DeviceIsMounted"
   label      <- prop "IdLabel"
+  vendor'    <- prop "DriveVendor"
+  model'     <- prop "DriveModel"
   isIntern   <- prop "DeviceIsSystemInternal"
   partitions <- prop "DeviceIsPartitionTable"
+  media      <- prop "DeviceIsMediaAvailable"
 
   let realMount = if isMounted then Just mount else Nothing
 
   return $ dev { mountPoints   = realMount
                , deviceFile    = devFile
                , name          = label
+               , vendor        = vendor'
+               , model         = model'
                , internal      = isIntern
                , hasPartitions = partitions
+               , hasMedia      = media
                }
 
   where prop x = fromVariant' <$> getProperty client dev x
-        dev    = Device path Nothing "" "" True False
+        dev    = Device path Nothing "" "" "" "" True False False
 
 listenCallback :: UDisksConnection -> Chan UDiskMessage -> Signal -> IO ()
 listenCallback con@(UDCon _ var) chan _ = do

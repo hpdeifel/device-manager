@@ -8,7 +8,7 @@ import Control.Concurrent
 import Control.Monad
 import Control.Applicative
 import qualified Data.Map as M
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe (isJust, isNothing, fromJust)
 import Data.Word (Word32)
 import Data.Int (Int32)
 import Control.Exception.Base
@@ -16,6 +16,7 @@ import System.Process
 
 import DBus.DBusAbstraction
 import DBus.UDisks
+import Common
 
 data Notify = Notify Client
 
@@ -56,16 +57,20 @@ main = do
       event <- readChan chan
       case event of
         DeviceAdded d -> do
-          unless (internal d || hasPartitions d) $ do
-            Data pathM idM <- takeMVar var
-            let body = mkBody d
-            iD <- notify client "Device Added" body
-              ["mount", "Mount", "open", "Open"]
+          Data pathM idM <- takeMVar var
 
-            listenDevice con d chan
-
+          unless (deviceBoring d) $ do
+            iD <- addNotification client d
             putMVar var $ Data (M.insert (objectPath d) d pathM)
                                (M.insert iD (objectPath d) idM)
+
+          -- also add boring devices, because they could become
+          -- interesting in the future
+          when (deviceBoring d) $
+            putMVar var $ Data (M.insert (objectPath d) d pathM) idM
+
+          listenDevice con d chan
+
 
         DeviceRemoved path -> do
           Data pathM idM <- takeMVar var
@@ -75,21 +80,35 @@ main = do
                 Nothing -> ""
 
           putMVar var $ Data (M.delete path pathM) idM
-          when (isJust dev) $ do
+          when (isJust dev && (not $ deviceBoring $ fromJust dev)) $ do
             _ <- notify client "Device removed" body []
             return ()
 
         DeviceChanged dev -> do
-          modifyMVar_ var $ \(Data pathM idM) -> do
-            case M.lookup (objectPath dev) pathM of
-              Just oldDev -> do
-                when ((isJust    $ mountPoints oldDev) && 
-                      (isNothing $ mountPoints dev)) $ do
-                  _ <- notify client "Device unmounted" (mkBody dev) []
-                  return ()
-              _ -> return ()
-                   
-            return $ Data (M.insert (objectPath dev) dev pathM) idM
+          Data pathM idM <- takeMVar var
+
+          let def = Data (M.insert (objectPath dev) dev pathM) idM
+
+          new <- case M.lookup (objectPath dev) pathM of
+            Just oldDev
+              -- device was mounted and isn't now => was unmounted
+              | isMounted oldDev && (not $ isMounted dev) -> do
+                _ <- notify client "Device unmounted" (mkBody dev) []
+                return def
+
+              -- hadn't had media and now has => media became available
+              | (not $ hasMedia oldDev) && (hasMedia dev) -> do
+                iD <- addNotification client dev
+                return $ Data (M.insert (objectPath dev) dev pathM)
+                              (M.insert iD (objectPath dev) idM)
+            _ -> return def
+
+          putMVar var new
+
+addNotification :: Client -> Device -> IO Word32
+addNotification client dev =
+  notify client "Device Added" (mkBody dev) ["mount", "Mount", "open", "Open"]
+
 
 mkBody :: Device -> String
 mkBody d = if name d == "" then deviceFile d
@@ -126,7 +145,6 @@ doOpen var path = do
   let loop = do
         threadDelay 1000000
         Data pathMap _ <- readMVar var
-        print $ M.lookup path pathMap
         case M.lookup path pathMap >>= mountPoints of
           Just (mp:_) -> do
             _ <- runProcess "xdg-open" [mp] Nothing Nothing

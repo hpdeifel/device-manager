@@ -4,7 +4,6 @@ module Main where
 
 import Graphics.Vty.Widgets.All
 import Graphics.Vty
-import System.Exit
 import Control.Monad
 import Control.Applicative ((<$>))
 import Control.Concurrent
@@ -13,6 +12,7 @@ import Data.List
 import Data.Maybe (isJust)
 
 import DBus.UDisks
+import Common
 
 main :: IO ()
 main = do
@@ -64,7 +64,7 @@ eventThread list con chan = forever $ do
 
 addDevice :: ListWidget -> Device -> IO ()
 addDevice lst d = do
-  unless (internal d || hasPartitions d) $ do
+  unless (deviceBoring d) $ do
     widget <- deviceLine d
     schedule $ addToList lst d widget
 
@@ -80,7 +80,7 @@ changeDevice lst dev = do
   idx <- getIndex lst dev
   remDevice lst (objectPath dev)
   case idx of
-    Just idx' -> unless (internal dev || hasPartitions dev) $ do
+    Just idx' -> unless (deviceBoring dev) $ do
       widget <- deviceLine dev
       schedule $ insertIntoList lst dev widget idx'
     Nothing   -> addDevice lst dev
@@ -103,11 +103,11 @@ getIndices lst = do
 deviceLine :: Device -> IO (Widget FormattedText)
 deviceLine d = do
   let file  = deviceFile d
-      label = name d
+      label = formatDeviceLabel d
       mount = T.pack $ case mountPoints d of
         Just mp -> " mounted on " ++ intercalate ", " mp
         Nothing -> ""
-      combined = (if label == "" then file else label ++ " (" ++ file ++ ")")
+      combined = maybe file (++ (" (" ++ file ++ ")")) label
       text = T.pack combined
 
   widget <- plainText ""

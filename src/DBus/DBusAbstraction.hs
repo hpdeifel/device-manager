@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
-module DBusAbstraction
+module DBus.DBusAbstraction
        ( DBusObject(..)
        , invoke
        , invoke'

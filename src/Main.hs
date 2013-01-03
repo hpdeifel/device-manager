@@ -12,7 +12,7 @@ import qualified Data.Text as T
 import Data.List
 import Data.Maybe (isJust)
 
-import UDisks
+import DBus.UDisks
 
 main :: IO ()
 main = do

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections#-}
 
-module Notifications where
+module Main where
 
 import DBus
 import DBus.Client
@@ -14,8 +14,8 @@ import Data.Int (Int32)
 import Control.Exception.Base
 import System.Process
 
-import DBusAbstraction
-import UDisks
+import DBus.DBusAbstraction
+import DBus.UDisks
 
 data Notify = Notify Client
 

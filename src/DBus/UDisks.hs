@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
-module UDisks
+module DBus.UDisks
        ( Device(..)
        , ObjectPath
        , UDisksConnection
@@ -27,7 +27,7 @@ import Data.Set ((\\))
 
 import DBus
 import DBus.Client
-import DBusAbstraction
+import DBus.DBusAbstraction
 
 data Device = Device {
   objectPath    :: DBus.ObjectPath,

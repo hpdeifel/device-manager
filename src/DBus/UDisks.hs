@@ -2,6 +2,7 @@
 
 module DBus.UDisks
        ( Device(..)
+       , isMounted
        , ObjectPath
        , UDisksConnection
        , udisksConnect
@@ -40,6 +41,9 @@ data Device = Device {
   hasPartitions :: Bool,
   hasMedia      :: Bool
 } deriving (Show)
+
+isMounted :: Device -> Bool
+isMounted = isJust . mountPoints
 
 data UDisksConnection = UDCon {
   dbusCon :: Client,

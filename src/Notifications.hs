@@ -156,7 +156,7 @@ doOpen var path = do
 
 notify :: Client -> String -> String -> [String] -> IO (Word32)
 notify client title body actions = do
-  iD <- fromVariant' <$> invoke client (Notify client) "Notify" [
+  iD <- invoke client (Notify client) "Notify" [
     toVariant ("Device Notifier" :: String),
     toVariant (0 :: Word32),
     toVariant ("save" :: String),
@@ -167,4 +167,6 @@ notify client title body actions = do
     toVariant (5000 :: Int32)
     ]
 
-  return iD
+  return $ case iD of
+    Left err -> error err
+    Right iD' -> fromVariant' iD'

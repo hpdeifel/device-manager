@@ -27,25 +27,33 @@ class DBusObject o where
   getInterface  :: o -> InterfaceName
   getDestination :: o -> BusName
 
+type ErrorMessage = String
+
 -- Invoke a method of the object
 invoke :: (DBusObject o)
           => Client             -- The DBus connection
           -> o                  -- The actual object
           -> MemberName         -- The name of the method to invoke
           -> [Variant]          -- The arguments, as Variants. See toVariant
-          -> IO Variant         -- The return value
+          -> IO (Either ErrorMessage Variant)         -- The return value
 invoke client obj member args = invoke' client obj (getInterface obj) member args
 
-invoke' :: (DBusObject o) => Client -> o -> InterfaceName -> MemberName -> [Variant] -> IO Variant
+invoke' :: (DBusObject o) => Client -> o -> InterfaceName -> MemberName -> [Variant] -> IO (Either ErrorMessage Variant)
 invoke' client obj interface member args = do
-  res <- call_ client (methodCall (getObjectPath obj) interface member) {
+  res <- call client (methodCall (getObjectPath obj) interface member) {
     methodCallDestination = Just (getDestination obj),
     methodCallBody = args
     }
-  return $ (methodReturnBody res !! 0)
+  return $ case res of
+    Left err -> Left $ methodErrorMessage err
+    Right res' -> Right (methodReturnBody res' !! 0)
 
 getProperty :: (DBusObject o) => Client -> o -> String -> IO Variant
-getProperty client obj property = fromVariant' <$> invoke' client obj propertyInterface "Get" [toVariant (getInterface obj), toVariant property]
+getProperty client obj property = do
+  res <- invoke' client obj propertyInterface "Get" [toVariant (getInterface obj), toVariant property]
+  case res of
+    Left err -> error err
+    Right res' -> return $ fromVariant' res'
 
 fromVariant' :: (IsVariant a) => Variant -> a
 fromVariant' v = case fromVariant v of

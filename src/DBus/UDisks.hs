@@ -112,7 +112,9 @@ doUnmount (UDCon client _) dev = do
 devicePathList :: UDisksConnection -> IO [ObjectPath]
 devicePathList con@(UDCon client _) = do
   reply <- invoke client con "EnumerateDevices" []
-  return $ fromJust (fromVariant reply)
+  case reply of
+    Left err -> error err
+    Right var -> return $ fromJust (fromVariant var)
 
 fillInDevice :: UDisksConnection -> ObjectPath -> IO Device
 fillInDevice (UDCon client _) path = do

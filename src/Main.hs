@@ -5,8 +5,6 @@ module Main where
 -- import Graphics.Vty.Widgets.All
 import Graphics.Vty.Widgets.ColumnList
 import Graphics.Vty.Widgets.Text
-import Graphics.Vty.Widgets.Borders
-import Graphics.Vty.Widgets.Box
 import Graphics.Vty.Widgets.Core
 import Graphics.Vty.Widgets.EventLoop
 import Graphics.Vty.Widgets.Util
@@ -23,8 +21,6 @@ import Common
 
 main :: IO ()
 main = do
-  title <- plainText "Devices:"
-
   let nameColumn = maybe "No name" T.pack . formatDeviceLabel
       devFileColumn = T.pack . deviceFile
       mountPointCol = maybe "" (T.pack . intercalate ",") . mountPoints
@@ -36,7 +32,7 @@ main = do
                           , ColumnSpec "Mount point" Expand mountPointCol
                           ]
 
-  layout <- return title <--> hBorder <--> return lst
+  layout <- return lst
   
   fg <- newFocusGroup
   addToFocusGroup fg layout

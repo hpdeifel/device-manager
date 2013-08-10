@@ -2,7 +2,14 @@
 
 module Main where
 
-import Graphics.Vty.Widgets.All
+-- import Graphics.Vty.Widgets.All
+import Graphics.Vty.Widgets.ColumnList
+import Graphics.Vty.Widgets.Text
+import Graphics.Vty.Widgets.Borders
+import Graphics.Vty.Widgets.Box
+import Graphics.Vty.Widgets.Core
+import Graphics.Vty.Widgets.EventLoop
+import Graphics.Vty.Widgets.Util
 import Graphics.Vty
 import Control.Monad
 import Control.Applicative ((<$>))
@@ -17,7 +24,17 @@ import Common
 main :: IO ()
 main = do
   title <- plainText "Devices:"
-  lst <- newList def_attr
+
+  let nameColumn = maybe "No name" T.pack . formatDeviceLabel
+      devFileColumn = T.pack . deviceFile
+      mountPointCol = maybe "" (T.pack . intercalate ",") . mountPoints
+      mountedColumn d = if isMounted d then "✔" else " "
+
+  lst <- newList def_attr [ ColumnSpec "Mounted" (Fixed 7) mountedColumn
+                          , ColumnSpec "Name" Expand nameColumn
+                          , ColumnSpec "Device" Expand devFileColumn
+                          , ColumnSpec "Mount point" Expand mountPointCol
+                          ]
 
   layout <- return title <--> hBorder <--> return lst
   
@@ -35,7 +52,7 @@ main = do
       shutdownUi >> return True
       else return False
 
-  lst `onItemActivated` \(ActivateItemEvent _ dev _) -> do
+  lst `onItemActivated` \(ActivateItemEvent _ dev) -> do
     if (isJust $ mountPoints dev)
       then doUnmount con dev
       else doMount con dev
@@ -52,7 +69,7 @@ main = do
 
   runUi c defaultContext { focusAttr = black `on` yellow }
 
-type ListWidget = Widget (List Device FormattedText) 
+type ListWidget = Widget (ColumnList Device) 
 
 eventThread :: ListWidget -> UDisksConnection -> Chan UDiskMessage -> IO ()
 eventThread list con chan = forever $ do
@@ -63,10 +80,8 @@ eventThread list con chan = forever $ do
     DeviceChanged dev  -> changeDevice list dev
 
 addDevice :: ListWidget -> Device -> IO ()
-addDevice lst d = do
-  unless (deviceBoring d) $ do
-    widget <- deviceLine d
-    schedule $ addToList lst d widget
+addDevice lst d = unless (deviceBoring d) $
+  schedule $ addToList lst d
 
 remDevice :: ListWidget -> ObjectPath -> IO ()
 remDevice lst path = do
@@ -80,9 +95,8 @@ changeDevice lst dev = do
   idx <- getIndex lst dev
   remDevice lst (objectPath dev)
   case idx of
-    Just idx' -> unless (deviceBoring dev) $ do
-      widget <- deviceLine dev
-      schedule $ insertIntoList lst dev widget idx'
+    Just idx' -> unless (deviceBoring dev) $
+      schedule $ insertIntoList lst dev idx'
     Nothing   -> addDevice lst dev
 
 getIndex :: ListWidget -> Device -> IO (Maybe Int)
@@ -97,7 +111,7 @@ getIndices :: ListWidget -> IO [(Int, Device)]
 getIndices lst = do
   count <- getListSize lst
   forM [0..count-1] $ \i -> do
-    Just (dev, _) <- getListItem lst i
+    Just dev <- getListItem lst i
     return (i, dev)
 
 deviceLine :: Device -> IO (Widget FormattedText)

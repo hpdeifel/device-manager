@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
-module Main where
+module Main (main) where
 
 -- import Graphics.Vty.Widgets.All
 import Graphics.Vty.Widgets.ColumnList
-import Graphics.Vty.Widgets.Text
 import Graphics.Vty.Widgets.Core
 import Graphics.Vty.Widgets.EventLoop
 import Graphics.Vty.Widgets.Util
@@ -109,19 +108,3 @@ getIndices lst = do
   forM [0..count-1] $ \i -> do
     Just dev <- getListItem lst i
     return (i, dev)
-
-deviceLine :: Device -> IO (Widget FormattedText)
-deviceLine d = do
-  let file  = deviceFile d
-      label = formatDeviceLabel d
-      mount = T.pack $ case mountPoints d of
-        Just mp -> " mounted on " ++ intercalate ", " mp
-        Nothing -> ""
-      combined = maybe file (++ (" (" ++ file ++ ")")) label
-      text = T.pack combined
-
-  widget <- plainText ""
-  setTextWithAttrs widget [ (text,  def_attr)
-                          , (mount, fgColor bright_green) 
-                          ]
-  return widget

@@ -38,6 +38,7 @@
 module Graphics.Vty.Widgets.ColumnList
        ( ColumnList
        , ColumnSpec(ColumnSpec)
+       , ColumnType(..)
        , ListError(..)
        , NewItemEvent(..)
        , RemoveItemEvent(..)
@@ -148,14 +149,18 @@ instance Show (ColumnList a) where
                   , " }"
                   ]
 
+data ColumnType = Expand | Fixed Int deriving (Show,Eq)
+
 data ColumnSpec a = ColumnSpec {
   title    :: Text,
+  colType  :: ColumnType,
   showFunc :: a -> Text
 }
 
 instance Show (ColumnSpec a) where
   show cs = concat [ "ColumnSpec { "
                    , "title = ", show $ title cs
+                   , "type  = ", show $ colType cs
                    ]
 
 newListData :: Attr -> [ColumnSpec a] -> IO (ColumnList a)
@@ -183,7 +188,8 @@ newListData selAttr cols = do
 renderList :: Widget (ColumnList a) -> DisplayRegion -> RenderContext -> IO Image
 renderList w region context = do
   cl <- getState w
-  h <- renderLine (region_width region) context (headerWidgets cl)
+  coltypes <- map colType <$> columns <~~ w
+  h <- renderLine (region_width region) context coltypes (headerWidgets cl)
   b <- render (borderWidget cl) region context
   height <- (fromIntegral . region_height) <$> getCurrentSize w
   foc <- focused <~ w
@@ -199,9 +205,8 @@ renderList w region context = do
     let line = fst (listItems cl ! i)
         att  = if foc then focusAttr context
                else mergeAttrs [ selectedUnfocusedAttr cl, defaultAttr ]
-    in if (i == selectedIndex cl)
-       then renderLine (region_width region) context { overrideAttr = att } line
-       else renderLine (region_width region) context line
+        ctx  = if (i == selectedIndex cl) then context { overrideAttr = att } else context
+    in renderLine (region_width region) ctx coltypes line
 
   let size = (region_width region, region_height region)
       remaining = fromIntegral $ max 0 (fromIntegral (region_height region) - 2 - length visible)
@@ -211,17 +216,24 @@ renderList w region context = do
   return $ crop size $
     (h <-> b <-> foldr (<->) empty_image body <-> filler)
 
-renderLine :: Word -> RenderContext -> [Widget FormattedText] -> IO Image
-renderLine width' context cols = do
+renderLine :: Word -> RenderContext -> [ColumnType] -> [Widget FormattedText] -> IO Image
+renderLine width' context colTypes cols = do
   imgs <- mapM rend $ zip widths cols
   return $ horiz_cat $ intersperse (background_fill 2 1) imgs
 
   where items = length cols
         width = fromIntegral width' - space
         space = (items - 1) * 2
-        minLengths = replicate items (width `div` items)
-        ones = replicate (width `mod` items) 1
-        widths = zipWith (+) minLengths (ones ++ repeat 0)
+        expandable = length $ filter (== Expand) colTypes
+        totalFixed = sum $ map (\(Fixed n) -> n) $ filter (/= Expand) colTypes
+        remainingWidth = width - totalFixed
+        minLengths = replicate expandable (remainingWidth `div` expandable)
+        ones = replicate (remainingWidth `mod` expandable) 1
+        expandWidths = zipWith (+) minLengths (ones ++ repeat 0)
+        widths' [] _ = []
+        widths' (Expand:rest) (e:es) = e : widths' rest es
+        widths' (Fixed n:rest) es    = n : widths' rest es
+        widths = widths' colTypes expandWidths
         mkRegion w = DisplayRegion (fromIntegral w) 1
         rend (width, widget) = do
           fix <- hFixed width widget
@@ -287,7 +299,7 @@ insertIntoList w element pos = do
   when (oldSel /= newSelIndex) $
     notifySelectionHandler w
 
-  where mkText e (ColumnSpec _ f) = plainText (f e)
+  where mkText e cs = plainText (showFunc cs e)
         vInject atPos a as = let (hd, t) = (V.take atPos as, V.drop atPos as)
                              in hd V.++ (V.cons a t)
 

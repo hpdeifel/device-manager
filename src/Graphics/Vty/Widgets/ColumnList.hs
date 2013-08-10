@@ -77,6 +77,7 @@ import Graphics.Vty.Widgets.Text
 import Graphics.Vty.Widgets.Borders
 import Graphics.Vty.Widgets.Fixed
 import Graphics.Vty.Widgets.Events
+import Graphics.Vty.Widgets.Util
 import Graphics.Vty.LLInput
 
 import qualified Data.Vector as V
@@ -126,7 +127,7 @@ data ActivateItemEvent a = ActivateItemEvent Int a
 data ColumnList a = ColumnList {
   listItems      :: V.Vector ([Widget FormattedText], a),
   columns        :: [ColumnSpec a],
-  selectedAttr   :: Attr, -- TODO differentiate between focused and unfocused
+  selectedUnfocusedAttr :: Attr,
   selectedIndex  :: Int,
   scrollTopIndex :: Int,
   headerWidgets  :: [Widget FormattedText],
@@ -140,6 +141,7 @@ data ColumnList a = ColumnList {
 instance Show (ColumnList a) where
   show l = concat [ "ColumnList { "
                   , "columns = ", show $ columns l
+                  , ", selectedUnfocusedAttr = ", show $ selectedUnfocusedAttr l
                   , ", selectedIndex = ", show $ selectedIndex l
                   , ", scrollTopIndex = ", show $ scrollTopIndex l
                   , ", listItems = <", show $ V.length $ listItems l, " items>"
@@ -167,7 +169,7 @@ newListData selAttr cols = do
 
   return $ ColumnList { listItems = V.empty
                       , columns = cols
-                      , selectedAttr = selAttr
+                      , selectedUnfocusedAttr = selAttr
                       , selectedIndex = (-1)
                       , scrollTopIndex = 0
                       , headerWidgets = header
@@ -184,13 +186,21 @@ renderList w region context = do
   h <- renderLine (region_width region) context (headerWidgets cl)
   b <- render (borderWidget cl) region context
   height <- (fromIntegral . region_height) <$> getCurrentSize w
+  foc <- focused <~ w
+
   let curScroll = scrollTopIndex cl
       items     = V.length (listItems cl) - 1
       visible = [curScroll..(min (curScroll + height) items)]
+      defaultAttr = mergeAttrs [ overrideAttr context
+                               , normalAttr context
+                               ]
+
   body <- forM visible $ \i -> 
     let line = fst (listItems cl ! i)
+        att  = if foc then focusAttr context
+               else mergeAttrs [ selectedUnfocusedAttr cl, defaultAttr ]
     in if (i == selectedIndex cl)
-       then renderLine (region_width region) context { overrideAttr = selectedAttr cl} line
+       then renderLine (region_width region) context { overrideAttr = att } line
        else renderLine (region_width region) context line
 
   let size = (region_width region, region_height region)

@@ -44,7 +44,7 @@ module Graphics.Vty.Widgets.ColumnList
        , SelectionEvent(..)
        , ActivateItemEvent(..)
 
-       -- ** List creatoin
+       -- ** List creation
        , newList
        , addToList
        , insertIntoList

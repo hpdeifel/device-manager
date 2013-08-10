@@ -104,7 +104,13 @@ data ColumnList a = ColumnList {
 }
 
 instance Show (ColumnList a) where
-  show _ = "ColumnList"
+  show l = concat [ "ColumnList { "
+                  , "columns = ", show $ columns l
+                  , ", selectedIndex = ", show $ selectedIndex l
+                  , ", scrollTopIndex = ", show $ scrollTopIndex l
+                  , ", listItems = <", show $ V.length $ listItems l, " items>"
+                  , " }"
+                  ]
 
 data ColumnSpec a = ColumnSpec {
   title    :: Text,

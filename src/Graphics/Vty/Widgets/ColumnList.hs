@@ -92,8 +92,6 @@ import Control.Monad
 import Control.Applicative ((<$>))
 import Control.Exception
 
-import Debug.Trace
-
 data ListError = BadItemIndex Int
                -- ^The specified position could not be used to remove
                -- an item from the list.
@@ -345,7 +343,7 @@ scrollBy w amount = do
   notifySelectionHandler w
 
 scrollBy' :: Int -> Int -> ColumnList a -> ColumnList a
-scrollBy' height amount cl = traceShow (scroll,height,new) $
+scrollBy' height amount cl = 
   cl { selectedIndex = new
      , scrollTopIndex = scroll }
   where len    = V.length $ listItems cl

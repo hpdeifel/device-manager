@@ -2,9 +2,13 @@
 
 -- | This widget is based on the List widget, but adds the ability for columns.
 module Graphics.Vty.Widgets.ColumnList
-       ( ColumnList()
+       ( ColumnList
        , ColumnSpec(ColumnSpec)
-       , ColumnSize(..)
+       , ListError(..)
+       , NewItemEvent(..)
+       , RemoveItemEvent(..)
+       , SelectionEvent(..)
+       , ActivateItemEvent(..)
 
        -- ** List creatoin
        , newList
@@ -17,7 +21,11 @@ module Graphics.Vty.Widgets.ColumnList
        , scrollDown
        , pageUp
        , pageDown
-
+       , onSelectionChange
+       , onItemAdded
+       , onItemRemoved
+       , onItemActivated
+       , activateCurrentItem
        , clearList
        , setSelected
 
@@ -31,10 +39,10 @@ import Graphics.Vty.Widgets.Core
 import Graphics.Vty.Attributes
 import Graphics.Vty.DisplayRegion
 import Graphics.Vty.Image
-import Graphics.Vty.Widgets.Table (ColumnSize(..))
 import Graphics.Vty.Widgets.Text
 import Graphics.Vty.Widgets.Borders
 import Graphics.Vty.Widgets.Fixed
+import Graphics.Vty.Widgets.Events
 import Graphics.Vty.LLInput
 
 import qualified Data.Vector as V
@@ -61,6 +69,26 @@ data ListError = BadItemIndex Int
 
 instance Exception ListError
 
+data SelectionEvent a = SelectionOn Int a
+                      -- ^An item at the specified position with the
+                      -- specified internal value and widget was
+                      -- selected.
+                      | SelectionOff
+                      -- ^No item was selected, which means the
+                      -- list is empty.
+
+-- |A new item was added to the list at the specified position with
+-- the specified value and widget.
+data NewItemEvent a = NewItemEvent Int a
+
+-- |An item was removed from the list at the specified position with
+-- the specified value and widget.
+data RemoveItemEvent a = RemoveItemEvent Int a
+
+-- |An item in the list was activated at the specified position with
+-- the specified value and widget.
+data ActivateItemEvent a = ActivateItemEvent Int a
+
 data ColumnList a = ColumnList {
   listItems      :: V.Vector ([Widget FormattedText], a),
   columns        :: [ColumnSpec a],
@@ -68,7 +96,11 @@ data ColumnList a = ColumnList {
   selectedIndex  :: Int,
   scrollTopIndex :: Int,
   headerWidgets  :: [Widget FormattedText],
-  borderWidget   :: Widget HBorder
+  borderWidget   :: Widget HBorder,
+  selectionChangeHandlers :: Handlers (SelectionEvent a),
+  itemAddHandlers :: Handlers (NewItemEvent a),
+  itemRemoveHandlers :: Handlers (RemoveItemEvent a),
+  itemActivateHandlers :: Handlers (ActivateItemEvent a)
 }
 
 instance Show (ColumnList a) where
@@ -88,6 +120,10 @@ newListData :: Attr -> [ColumnSpec a] -> IO (ColumnList a)
 newListData selAttr cols = do
   header <- mapM (plainText . title) cols
   border <- hBorder
+  schs <- newHandlers
+  iahs <- newHandlers
+  irhs <- newHandlers
+  iacths <- newHandlers
 
   return $ ColumnList { listItems = V.empty
                       , columns = cols
@@ -96,6 +132,10 @@ newListData selAttr cols = do
                       , scrollTopIndex = 0
                       , headerWidgets = header
                       , borderWidget = border
+                      , selectionChangeHandlers = schs
+                      , itemAddHandlers = iahs
+                      , itemRemoveHandlers = irhs
+                      , itemActivateHandlers = iacths
                       }
 
 renderList :: Widget (ColumnList a) -> DisplayRegion -> RenderContext -> IO Image
@@ -156,6 +196,7 @@ listKeyEvent w KUp _ = scrollUp w >> return True
 listKeyEvent w KDown _ = scrollDown w >> return True
 listKeyEvent w KPageUp _ = pageUp w >> return True
 listKeyEvent w KPageDown _ = pageDown w >> return True
+listKeyEvent w KEnter _ = activateCurrentItem w >> return True
 listKeyEvent _ _ _ = return False
 
 addToList :: Widget (ColumnList a) -> a -> IO ()
@@ -191,6 +232,11 @@ insertIntoList w element pos = do
                                 , scrollTopIndex = newScrollTop
                                 }
 
+  notifyItemAddHandler w (min pos numItems) element
+
+  when (oldSel /= newSelIndex) $
+    notifySelectionHandler w
+
   where mkText e (ColumnSpec _ f) = plainText (f e)
         vInject atPos a as = let (hd, t) = (V.take atPos as, V.drop atPos as)
                              in hd V.++ (V.cons a t)
@@ -223,12 +269,18 @@ removeFromList w pos = do
                                 , scrollTopIndex = newScrollTop
                                 }
 
+  notifyItemRemoveHandler w pos element
+
+  when (oldSel /= newSelectedIndex) $
+    notifySelectionHandler w
+
   return element
 
 scrollBy :: Widget (ColumnList a) -> Int -> IO ()
 scrollBy w amount = do
   height <- (fromIntegral . region_height) <$> getCurrentSize w
   updateWidgetState w (scrollBy' (height - 2) amount)
+  notifySelectionHandler w
 
 scrollBy' :: Int -> Int -> ColumnList a -> ColumnList a
 scrollBy' height amount cl = traceShow (scroll,height,new) $
@@ -289,3 +341,48 @@ getListItem wRef pos = do
   case pos >= 0 && pos < (V.length $ listItems list) of
     False ->  return Nothing
     True -> return $ Just $ snd (listItems list ! pos)
+
+onSelectionChange :: Widget (ColumnList a)
+                  -> (SelectionEvent a -> IO ())
+                  -> IO ()
+onSelectionChange = addHandler (selectionChangeHandlers <~~)
+
+onItemAdded :: Widget (ColumnList a)
+            -> (NewItemEvent a -> IO ())
+            -> IO ()
+onItemAdded = addHandler (itemAddHandlers <~~)
+
+onItemRemoved :: Widget (ColumnList a)
+              -> (RemoveItemEvent a -> IO ())
+              -> IO ()
+onItemRemoved = addHandler (itemRemoveHandlers <~~)
+
+onItemActivated :: Widget (ColumnList a)
+                -> (ActivateItemEvent a -> IO ())
+                -> IO ()
+onItemActivated = addHandler (itemActivateHandlers <~~)
+
+activateCurrentItem :: Widget (ColumnList a) -> IO ()
+activateCurrentItem wRef = do
+  mSel <- getSelected wRef
+  case mSel of
+    Nothing -> return ()
+    Just (pos, w) ->
+      fireEvent wRef (itemActivateHandlers <~~) $ ActivateItemEvent pos w
+
+notifySelectionHandler :: Widget (ColumnList a) -> IO ()
+notifySelectionHandler wRef = do
+  sel <- getSelected wRef
+  case sel of
+    Nothing ->
+        fireEvent wRef (selectionChangeHandlers <~~) SelectionOff
+    Just (pos, a) ->
+        fireEvent wRef (selectionChangeHandlers <~~) $ SelectionOn pos a
+
+notifyItemRemoveHandler :: Widget (ColumnList a) -> Int -> a -> IO ()
+notifyItemRemoveHandler wRef pos k =
+    fireEvent wRef (itemRemoveHandlers <~~) $ RemoveItemEvent pos k
+
+notifyItemAddHandler :: Widget (ColumnList a) -> Int -> a -> IO ()
+notifyItemAddHandler wRef pos k =
+    fireEvent wRef (itemAddHandlers <~~) $ NewItemEvent pos k

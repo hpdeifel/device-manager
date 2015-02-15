@@ -69,7 +69,9 @@ main = do
           unless (deviceBoring d) $ do
             iD <- addNotification client d
             putMVar var $ Data (M.insert (objectPath d) d pathM)
-                               (M.insert iD (objectPath d) idM)
+                               (case iD of
+                                 Just iD' -> M.insert iD' (objectPath d) idM
+                                 Nothing -> idM)
 
           -- also add boring devices, because they could become
           -- interesting in the future
@@ -107,12 +109,14 @@ main = do
               | (not $ hasMedia oldDev) && (hasMedia dev) -> do
                 iD <- addNotification client dev
                 return $ Data (M.insert (objectPath dev) dev pathM)
-                              (M.insert iD (objectPath dev) idM)
+                              (case iD of
+                                Just iD' -> (M.insert iD' (objectPath dev) idM)
+                                Nothing -> idM)
             _ -> return def
 
           putMVar var new
 
-addNotification :: Client -> Device -> IO Word32
+addNotification :: Client -> Device -> IO (Maybe Word32)
 addNotification client dev =
   notify client "Device Added" (mkBody dev) ["mount", "Mount", "open", "Open"]
 
@@ -161,7 +165,7 @@ doOpen var path = do
 
   foldM_ (\g _ -> if g then loop else return g) True [1..5::Int]
 
-notify :: Client -> String -> String -> [String] -> IO (Word32)
+notify :: Client -> String -> String -> [String] -> IO (Maybe Word32)
 notify client title body actions = do
   iD <- invoke client (Notify client) "Notify" [
     toVariant ("Device Notifier" :: String),
@@ -174,6 +178,6 @@ notify client title body actions = do
     toVariant (5000 :: Int32)
     ]
 
-  return $ case iD of
-    Left err -> error err
-    Right iD' -> fromVariant' iD'
+  case iD of
+    Left err -> hPutStrLn stderr err >> return Nothing
+    Right iD' -> return $ Just $ fromVariant' iD'

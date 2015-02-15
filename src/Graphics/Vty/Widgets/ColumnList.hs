@@ -222,7 +222,9 @@ renderLine width' context colTypes cols = do
         space = (items - 1) * 2
         expandable = length $ filter (== Expand) colTypes
         totalFixed = sum $ map (\(Fixed n) -> n) $ filter (/= Expand) colTypes
-        remainingWidth = width - totalFixed
+        remainingWidth
+          | totalFixed > width = 0
+          | otherwise          = width - totalFixed
         minLengths = replicate expandable (remainingWidth `div` expandable)
         ones = replicate (remainingWidth `mod` expandable) 1
         expandWidths = zipWith (+) minLengths (ones ++ repeat 0)
@@ -231,6 +233,7 @@ renderLine width' context colTypes cols = do
         widths' (Fixed n:rest) es    = n : widths' rest es
         widths = widths' colTypes expandWidths
         mkRegion w = ((fromIntegral w), 1)
+        rend (0, _) = return emptyImage
         rend (width, widget) = do
           fix <- hFixed width widget
           render fix (mkRegion width) context

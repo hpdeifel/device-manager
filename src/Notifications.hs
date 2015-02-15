@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections#-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 
 module Main where
 
@@ -13,10 +13,13 @@ import Data.Word (Word32)
 import Data.Int (Int32)
 import Control.Exception.Base
 import System.Process
+import qualified Data.Text.IO as T
+import System.IO
 
 import DBus.DBusAbstraction
 import DBus.UDisks
 import Common
+import ErrorLogger
 
 data Notify = Notify Client
 
@@ -27,11 +30,16 @@ instance DBusObject Notify where
 
 data NoteData = Data (M.Map ObjectPath Device) (M.Map Word32 ObjectPath)
 
+data StderrLogger = StderrLogger
+
+instance ErrorLogger StderrLogger where
+  logError _ = T.hPutStrLn stderr
+
 main :: IO ()
 main = do
   client <- connectSession
 
-  con <- udisksConnect
+  con <- udisksConnect StderrLogger
 
   chan <- newChan
 
@@ -121,7 +129,7 @@ closedCallback var sig = do
   modifyMVar_ var $ \(Data pathM idM) ->
     return $ Data pathM (M.delete iD idM)
 
-actionCallback :: UDisksConnection -> MVar NoteData -> Signal -> IO ()
+actionCallback :: (UDisksConnection a) -> MVar NoteData -> Signal -> IO ()
 actionCallback con var sig = do
   Data pathM idM <- takeMVar var
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, LambdaCase #-}
 
 module DBus.UDisks
        ( Device(..)
@@ -25,10 +25,12 @@ import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import qualified Data.Set as S
 import Data.Set ((\\))
+import qualified Data.Text as T
 
 import DBus
 import DBus.Client
 import DBus.DBusAbstraction
+import ErrorLogger
 
 data Device = Device {
   objectPath    :: DBus.ObjectPath,
@@ -45,21 +47,22 @@ data Device = Device {
 isMounted :: Device -> Bool
 isMounted = isJust . mountPoints
 
-data UDisksConnection = UDCon {
+data UDisksConnection a = UDCon {
   dbusCon :: Client,
-  devList :: MVar [ObjectPath]
+  devList :: MVar [ObjectPath],
+  errLog  :: a
 }
 
-udisksConnect :: IO UDisksConnection
-udisksConnect = connectSystem >>= udisksConnect'
+udisksConnect :: (ErrorLogger log) => log -> IO (UDisksConnection log)
+udisksConnect logger = connectSystem >>= udisksConnect' logger
 
-udisksDisconnect :: UDisksConnection -> IO ()
-udisksDisconnect (UDCon client _) = disconnect client
+udisksDisconnect :: (UDisksConnection a) -> IO ()
+udisksDisconnect (UDCon client _ _) = disconnect client
 
-udisksConnect' :: Client -> IO UDisksConnection
-udisksConnect' con = do
+udisksConnect' :: ErrorLogger log => log -> Client -> IO (UDisksConnection log)
+udisksConnect' logger con = do
   var <- newEmptyMVar
-  let ucon = UDCon con var
+  let ucon = UDCon con var logger
 
   devs <- devicePathList ucon
   putMVar var devs
@@ -67,8 +70,8 @@ udisksConnect' con = do
   return ucon
 
 
-getDeviceList :: UDisksConnection -> IO [Device]
-getDeviceList con@(UDCon _ var) = do
+getDeviceList :: (UDisksConnection a) -> IO [Device]
+getDeviceList con@(UDCon _ var _) = do
   list <- takeMVar var
   devs <- mapM (fillInDevice con) list
   putMVar var list
@@ -82,42 +85,44 @@ data UDiskMessage = DeviceAdded Device
                   | DeviceChanged Device
 
 -- | Do not call twice
-listenEvents :: UDisksConnection -> Chan UDiskMessage -> IO ()
-listenEvents con@(UDCon client _) chan = do
+listenEvents :: ErrorLogger a => (UDisksConnection a) -> Chan UDiskMessage -> IO ()
+listenEvents con@(UDCon client _ _) chan = do
   mapM_ listenTo ["DeviceAdded" ,"DeviceRemoved"]
   where listenTo mem =
           listen client (matchSignal con mem) (listenCallback con chan)
 
-listenDevice :: UDisksConnection -> Device -> Chan UDiskMessage -> IO ()
-listenDevice con@(UDCon client _) dev chan = do
+listenDevice :: (UDisksConnection a) -> Device -> Chan UDiskMessage -> IO ()
+listenDevice con@(UDCon client _ _) dev chan = do
   listen client (matchSignal dev "Changed")
     (devListenCallback con chan)
 
 -- Actions
 ----------
 
-doMount :: UDisksConnection -> Device -> IO ()
-doMount (UDCon client _) dev = do
-  _ <- invoke client dev "FilesystemMount" [toVariant ("" :: String), toVariant ([] :: [String])]
-  return ()
+doMount :: ErrorLogger a => UDisksConnection a -> Device -> IO ()
+doMount (UDCon client _ logger) dev =
+  invoke client dev "FilesystemMount" [toVariant ("" :: String), toVariant ([] :: [String])] >>= \case
+    Left err -> logError logger (T.pack err)
+    Right _  -> return ()
 
-doUnmount :: UDisksConnection -> Device -> IO ()
-doUnmount (UDCon client _) dev = do
-  _ <- invoke client dev "FilesystemUnmount" [toVariant ([] :: [String])]
-  return ()
+doUnmount :: ErrorLogger a => UDisksConnection a -> Device -> IO ()
+doUnmount (UDCon client _ logger) dev =
+  invoke client dev "FilesystemUnmount" [toVariant ([] :: [String])] >>= \case
+    Left err -> logError logger (T.pack err)
+    Right _ -> return ()
 
 -- Helpers
 ----------
 
-devicePathList :: UDisksConnection -> IO [ObjectPath]
-devicePathList con@(UDCon client _) = do
+devicePathList :: ErrorLogger a => (UDisksConnection a) -> IO [ObjectPath]
+devicePathList con@(UDCon client _ logger) = do
   reply <- invoke client con "EnumerateDevices" []
   case reply of
-    Left err -> error err
+    Left err -> logError logger (T.pack err) >> return []
     Right var -> return $ fromJust (fromVariant var)
 
-fillInDevice :: UDisksConnection -> ObjectPath -> IO Device
-fillInDevice (UDCon client _) path = do
+fillInDevice :: (UDisksConnection a) -> ObjectPath -> IO Device
+fillInDevice (UDCon client _ _) path = do
   mount      <- prop "DeviceMountPaths"
   devFile    <- prop "DeviceFile"
   isMounted  <- prop "DeviceIsMounted"
@@ -143,8 +148,8 @@ fillInDevice (UDCon client _) path = do
   where prop x = fromVariant' <$> getProperty client dev x
         dev    = Device path Nothing "" "" "" "" True False False
 
-listenCallback :: UDisksConnection -> Chan UDiskMessage -> Signal -> IO ()
-listenCallback con@(UDCon _ var) chan _ = do
+listenCallback :: ErrorLogger a => (UDisksConnection a) -> Chan UDiskMessage -> Signal -> IO ()
+listenCallback con@(UDCon _ var _) chan _ = do
   oldDevices <- takeMVar var
   newDevices <- devicePathList con
 
@@ -162,8 +167,8 @@ listenCallback con@(UDCon _ var) chan _ = do
 
   putMVar var newDevices
 
-devListenCallback :: UDisksConnection -> Chan UDiskMessage -> Signal -> IO ()
-devListenCallback con@(UDCon _ var) chan sig = do
+devListenCallback :: (UDisksConnection a) -> Chan UDiskMessage -> Signal -> IO ()
+devListenCallback con@(UDCon _ var _) chan sig = do
   list <- takeMVar var
   dev <- fillInDevice con (signalPath sig)
   writeChan chan (DeviceChanged dev)
@@ -177,7 +182,7 @@ instance DBusObject Device where
   getInterface   _   = "org.freedesktop.UDisks.Device"
   getDestination _   = "org.freedesktop.UDisks"
 
-instance DBusObject UDisksConnection where
+instance DBusObject (UDisksConnection a) where
   getObjectPath  _ = "/org/freedesktop/UDisks"
   getInterface   _ = "org.freedesktop.UDisks"
   getDestination _ = "org.freedesktop.UDisks"

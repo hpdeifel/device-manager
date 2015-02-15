@@ -245,7 +245,7 @@ newList selAttr cols = do
   wRef <- newWidget list $ \w ->
     w { render_ = renderList
       , growHorizontal_ = const $ return True
-      , growVertical_ = const $ return False
+      , growVertical_ = const $ return True
       , getCursorPosition_ = const $ return Nothing
       , keyEventHandler = listKeyEvent
       }

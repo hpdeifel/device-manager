@@ -7,6 +7,9 @@ import Graphics.Vty.Widgets.ColumnList
 import Graphics.Vty.Widgets.Core
 import Graphics.Vty.Widgets.EventLoop
 import Graphics.Vty.Widgets.Util
+import Graphics.Vty.Widgets.Text
+import Graphics.Vty.Widgets.Box
+import Graphics.Vty.Widgets.Borders
 import Graphics.Vty
 import Control.Monad
 import Control.Applicative ((<$>))
@@ -17,6 +20,7 @@ import Data.Maybe (isJust)
 
 import DBus.UDisks
 import Common
+import ErrorLogger
 
 main :: IO ()
 main = do
@@ -31,7 +35,9 @@ main = do
                          , ColumnSpec "Mount point" Expand mountPointCol
                          ]
 
-  layout <- return lst
+  statusBar <- plainText "Welcome"
+
+  layout <- return lst <--> hBorder <--> return statusBar
 
   fg <- newFocusGroup
   addToFocusGroup fg layout
@@ -39,7 +45,9 @@ main = do
   c <- newCollection
   _ <- addToCollection c layout fg
 
-  con  <- udisksConnect
+  errLog <- ErrLog <$> newChan
+
+  con  <- udisksConnect errLog
   devs <- getDeviceList con
 
   fg `onKeyPressed` \_ key _ ->
@@ -60,13 +68,14 @@ main = do
 
   listenEvents con chan
 
-  forkIO $ eventThread lst con chan
+  void $ forkIO $ eventThread lst con chan
+  void $ forkIO $ logThread errLog statusBar
 
   runUi c defaultContext { focusAttr = black `on` yellow }
 
 type ListWidget = Widget (ColumnList Device)
 
-eventThread :: ListWidget -> UDisksConnection -> Chan UDiskMessage -> IO ()
+eventThread :: ListWidget -> (UDisksConnection a) -> Chan UDiskMessage -> IO ()
 eventThread list con chan = forever $ do
   msg <- readChan chan
   case msg of
@@ -108,3 +117,14 @@ getIndices lst = do
   forM [0..count-1] $ \i -> do
     Just dev <- getListItem lst i
     return (i, dev)
+
+
+newtype ErrLog = ErrLog (Chan T.Text)
+
+instance ErrorLogger ErrLog where
+  logError (ErrLog chan) t = writeChan chan t
+
+logThread :: ErrLog -> Widget FormattedText -> IO ()
+logThread (ErrLog chan) statusBar = forever $ do
+  msg <- readChan chan
+  setText statusBar msg

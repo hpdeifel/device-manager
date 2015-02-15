@@ -85,15 +85,15 @@ data UDiskMessage = DeviceAdded Device
                   | DeviceChanged Device
 
 -- | Do not call twice
-listenEvents :: ErrorLogger a => (UDisksConnection a) -> Chan UDiskMessage -> IO ()
-listenEvents con@(UDCon client _ _) chan = do
+listenEvents :: ErrorLogger a => UDisksConnection a -> Chan UDiskMessage -> IO ()
+listenEvents con@(UDCon client _ _) chan =
   mapM_ listenTo ["DeviceAdded" ,"DeviceRemoved"]
   where listenTo mem =
-          listen client (matchSignal con mem) (listenCallback con chan)
+          void $ addMatch client (matchSignal con mem) (listenCallback con chan)
 
-listenDevice :: (UDisksConnection a) -> Device -> Chan UDiskMessage -> IO ()
-listenDevice con@(UDCon client _ _) dev chan = do
-  listen client (matchSignal dev "Changed")
+listenDevice :: UDisksConnection a -> Device -> Chan UDiskMessage -> IO ()
+listenDevice con@(UDCon client _ _) dev chan =
+  void $ addMatch client (matchSignal dev "Changed")
     (devListenCallback con chan)
 
 -- Actions

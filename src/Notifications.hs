@@ -6,9 +6,8 @@ import DBus
 import DBus.Client
 import Control.Concurrent
 import Control.Monad
-import Control.Applicative
 import qualified Data.Map as M
-import Data.Maybe (isJust, isNothing, fromJust)
+import Data.Maybe (isJust, fromJust)
 import Data.Word (Word32)
 import Data.Int (Int32)
 import Control.Exception.Base
@@ -50,10 +49,10 @@ main = do
   var <- newMVar (Data (M.fromList $ objMap)
                        (M.fromList $ map (\d -> (0,objectPath d)) devs))
 
-  listen client (matchSignal (Notify client) "NotificationClosed")
+  void $ addMatch client (matchSignal (Notify client) "NotificationClosed")
     (closedCallback var)
 
-  listen client (matchSignal (Notify client) "ActionInvoked")
+  void $ addMatch client (matchSignal (Notify client) "ActionInvoked")
     (actionCallback con var)
 
   forM_ devs $ \d -> do
@@ -129,7 +128,7 @@ closedCallback var sig = do
   modifyMVar_ var $ \(Data pathM idM) ->
     return $ Data pathM (M.delete iD idM)
 
-actionCallback :: (UDisksConnection a) -> MVar NoteData -> Signal -> IO ()
+actionCallback :: ErrorLogger a => UDisksConnection a -> MVar NoteData -> Signal -> IO ()
 actionCallback con var sig = do
   Data pathM idM <- takeMVar var
 

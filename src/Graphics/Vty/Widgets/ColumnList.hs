@@ -72,21 +72,19 @@ module Graphics.Vty.Widgets.ColumnList
 
 import Graphics.Vty.Widgets.Core
 import Graphics.Vty.Attributes
-import Graphics.Vty.DisplayRegion
 import Graphics.Vty.Image
 import Graphics.Vty.Widgets.Text
 import Graphics.Vty.Widgets.Borders
 import Graphics.Vty.Widgets.Fixed
 import Graphics.Vty.Widgets.Events
 import Graphics.Vty.Widgets.Util
-import Graphics.Vty.LLInput
+import Graphics.Vty
 
 import qualified Data.Vector as V
 import Data.Vector ((!))
 import Data.Text (Text)
 import Data.List
 import Data.Typeable
-import Data.Word (Word)
 
 import Control.Monad
 import Control.Applicative ((<$>))
@@ -187,9 +185,9 @@ renderList :: Widget (ColumnList a) -> DisplayRegion -> RenderContext -> IO Imag
 renderList w region context = do
   cl <- getState w
   coltypes <- map colType <$> columns <~~ w
-  h <- renderLine (region_width region) context coltypes (headerWidgets cl)
+  h <- renderLine (regionWidth region) context coltypes (headerWidgets cl)
   b <- render (borderWidget cl) region context
-  height <- (fromIntegral . region_height) <$> getCurrentSize w
+  height <- (fromIntegral . regionHeight) <$> getCurrentSize w
   foc <- focused <~ w
 
   let curScroll = scrollTopIndex cl
@@ -204,20 +202,20 @@ renderList w region context = do
         att  = if foc then focusAttr context
                else mergeAttrs [ selectedUnfocusedAttr cl, defaultAttr ]
         ctx  = if (i == selectedIndex cl) then context { overrideAttr = att } else context
-    in renderLine (region_width region) ctx coltypes line
+    in renderLine (regionWidth region) ctx coltypes line
 
-  let size = (region_width region, region_height region)
-      remaining = fromIntegral $ max 0 (fromIntegral (region_height region) - 2 - length visible)
-      filler = if remaining == 0 then empty_image
-               else char_fill (normalAttr context) ' ' (region_width region) remaining
+  let size = (regionWidth region, regionHeight region)
+      remaining = fromIntegral $ max 0 (fromIntegral (regionHeight region) - 2 - length visible)
+      filler = if remaining == 0 then emptyImage
+               else charFill (normalAttr context) ' ' (regionWidth region) remaining
 
-  return $ crop size $
-    (h <-> b <-> foldr (<->) empty_image body <-> filler)
+  return $ crop (fst size) (snd size) $
+    (h <-> b <-> foldr (<->) emptyImage body <-> filler)
 
-renderLine :: Word -> RenderContext -> [ColumnType] -> [Widget FormattedText] -> IO Image
+renderLine :: Int -> RenderContext -> [ColumnType] -> [Widget FormattedText] -> IO Image
 renderLine width' context colTypes cols = do
   imgs <- mapM rend $ zip widths cols
-  return $ horiz_cat $ intersperse (background_fill 2 1) imgs
+  return $ horizCat $ intersperse (backgroundFill 2 1) imgs
 
   where items = length cols
         width = fromIntegral width' - space
@@ -232,7 +230,7 @@ renderLine width' context colTypes cols = do
         widths' (Expand:rest) (e:es) = e : widths' rest es
         widths' (Fixed n:rest) es    = n : widths' rest es
         widths = widths' colTypes expandWidths
-        mkRegion w = DisplayRegion (fromIntegral w) 1
+        mkRegion w = ((fromIntegral w), 1)
         rend (width, widget) = do
           fix <- hFixed width widget
           render fix (mkRegion width) context
@@ -270,7 +268,7 @@ insertIntoList w element pos = do
   oldSel <- selectedIndex <~~ w
   oldScr <- scrollTopIndex <~~ w
   cols <- columns <~~ w
-  height <- (fromIntegral . region_height) <$> getCurrentSize w
+  height <- (fromIntegral . regionHeight) <$> getCurrentSize w
 
   let newSelIndex
         | numItems == 0 = 0
@@ -338,7 +336,7 @@ removeFromList w pos = do
 
 scrollBy :: Widget (ColumnList a) -> Int -> IO ()
 scrollBy w amount = do
-  height <- (fromIntegral . region_height) <$> getCurrentSize w
+  height <- (fromIntegral . regionHeight) <$> getCurrentSize w
   updateWidgetState w (scrollBy' (height - 2) amount)
   notifySelectionHandler w
 
@@ -369,12 +367,12 @@ getSelected w = do
 
 pageUp :: Widget (ColumnList a) -> IO ()
 pageUp w = do
-  amt <- fromIntegral . region_height <$> getCurrentSize w
+  amt <- fromIntegral . regionHeight <$> getCurrentSize w
   scrollBy w (-1 * (amt - 2))
 
 pageDown :: Widget (ColumnList a) -> IO ()
 pageDown w = do
-  amt <- fromIntegral . region_height <$> getCurrentSize w
+  amt <- fromIntegral . regionHeight <$> getCurrentSize w
   scrollBy w (amt - 2)
 
 clearList :: Widget (ColumnList a) -> IO ()

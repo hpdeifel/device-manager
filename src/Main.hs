@@ -25,11 +25,11 @@ main = do
       mountPointCol = maybe "" (T.pack . intercalate ",") . mountPoints
       mountedColumn d = if isMounted d then "✔" else " "
 
-  lst <- newList def_attr [ ColumnSpec "Mounted" (Fixed 7) mountedColumn
-                          , ColumnSpec "Name" Expand nameColumn
-                          , ColumnSpec "Device" Expand devFileColumn
-                          , ColumnSpec "Mount point" Expand mountPointCol
-                          ]
+  lst <- newList defAttr [ ColumnSpec "Mounted" (Fixed 7) mountedColumn
+                         , ColumnSpec "Name" Expand nameColumn
+                         , ColumnSpec "Device" Expand devFileColumn
+                         , ColumnSpec "Mount point" Expand mountPointCol
+                         ]
 
   layout <- return lst
 
@@ -43,7 +43,7 @@ main = do
   devs <- getDeviceList con
 
   fg `onKeyPressed` \_ key _ ->
-    if key == KASCII 'q' then
+    if key == KChar 'q' then
       shutdownUi >> return True
       else return False
 

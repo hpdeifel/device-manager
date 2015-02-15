@@ -2,27 +2,27 @@
 
 -- | Adapted from the vty-ui library by Jonathan Daugherty.
 -- The original copyright was:
--- 
+--
 -- Copyright (c) 2009-2013, Jonathan Daugherty.
--- 
+--
 -- All rights reserved.
--- 
+--
 -- Redistribution and use in source and binary forms, with or without
 -- modification, are permitted provided that the following conditions are
 -- met:
--- 
+--
 --     * Redistributions of source code must retain the above copyright
 --       notice, this list of conditions and the following disclaimer.
--- 
+--
 --     * Redistributions in binary form must reproduce the above
 --       copyright notice, this list of conditions and the following
 --       disclaimer in the documentation and/or other materials provided
 --       with the distribution.
--- 
+--
 --     * The names of the contributors may not be used to endorse or
 --       promote products derived from this software without specific
 --       prior written permission.
--- 
+--
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 -- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 -- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -199,7 +199,7 @@ renderList w region context = do
                                , normalAttr context
                                ]
 
-  body <- forM visible $ \i -> 
+  body <- forM visible $ \i ->
     let line = fst (listItems cl ! i)
         att  = if foc then focusAttr context
                else mergeAttrs [ selectedUnfocusedAttr cl, defaultAttr ]
@@ -236,8 +236,8 @@ renderLine width' context colTypes cols = do
         rend (width, widget) = do
           fix <- hFixed width widget
           render fix (mkRegion width) context
-        
-               
+
+
 newList :: Attr -> [ColumnSpec a] -> IO (Widget (ColumnList a))
 newList selAttr cols = do
   list <- newListData selAttr cols
@@ -248,7 +248,7 @@ newList selAttr cols = do
       , getCursorPosition_ = const $ return Nothing
       , keyEventHandler = listKeyEvent
       }
-                         
+
   return wRef
 
 listKeyEvent :: Widget (ColumnList a) -> Key -> [Modifier] -> IO Bool
@@ -343,7 +343,7 @@ scrollBy w amount = do
   notifySelectionHandler w
 
 scrollBy' :: Int -> Int -> ColumnList a -> ColumnList a
-scrollBy' height amount cl = 
+scrollBy' height amount cl =
   cl { selectedIndex = new
      , scrollTopIndex = scroll }
   where len    = V.length $ listItems cl

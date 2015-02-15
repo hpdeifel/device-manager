@@ -32,10 +32,10 @@ main = do
                           ]
 
   layout <- return lst
-  
+
   fg <- newFocusGroup
   addToFocusGroup fg layout
-  
+
   c <- newCollection
   _ <- addToCollection c layout fg
 
@@ -54,8 +54,8 @@ main = do
 
   chan <- newChan
 
-  forM_ devs $ \d -> do 
-    addDevice lst d 
+  forM_ devs $ \d -> do
+    addDevice lst d
     listenDevice con d chan
 
   listenEvents con chan
@@ -64,7 +64,7 @@ main = do
 
   runUi c defaultContext { focusAttr = black `on` yellow }
 
-type ListWidget = Widget (ColumnList Device) 
+type ListWidget = Widget (ColumnList Device)
 
 eventThread :: ListWidget -> UDisksConnection -> Chan UDiskMessage -> IO ()
 eventThread list con chan = forever $ do

@@ -61,7 +61,7 @@ fromVariant' v = case fromVariant v of
   Nothing  -> error ("Variant " ++ show v ++ " failed")
 
 matchSignal :: (DBusObject o) => o -> MemberName -> MatchRule
-matchSignal obj member = matchAny { 
+matchSignal obj member = matchAny {
   matchPath        = Just (getObjectPath obj),
   matchInterface   = Just (getInterface obj),
 --  matchDestination = Just (getDestination obj),

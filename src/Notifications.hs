@@ -30,11 +30,11 @@ data NoteData = Data (M.Map ObjectPath Device) (M.Map Word32 ObjectPath)
 main :: IO ()
 main = do
   client <- connectSession
-  
+
   con <- udisksConnect
 
   chan <- newChan
-  
+
   devs <- getDeviceList con
   let objMap = concat $ map checkDev devs
       checkDev d = if internal d || hasPartitions d
@@ -48,10 +48,10 @@ main = do
   listen client (matchSignal (Notify client) "ActionInvoked")
     (actionCallback con var)
 
-  forM_ devs $ \d -> do 
+  forM_ devs $ \d -> do
     listenDevice con d chan
   listenEvents con chan
-  
+
   flip finally (disconnect client >> udisksDisconnect con) $
     forever $ do
       event <- readChan chan

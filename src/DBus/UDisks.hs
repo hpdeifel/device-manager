@@ -97,7 +97,7 @@ listenDevice con@(UDCon client _) dev chan = do
 ----------
 
 doMount :: UDisksConnection -> Device -> IO ()
-doMount (UDCon client _) dev = do 
+doMount (UDCon client _) dev = do
   _ <- invoke client dev "FilesystemMount" [toVariant ("" :: String), toVariant ([] :: [String])]
   return ()
 
@@ -147,7 +147,7 @@ listenCallback :: UDisksConnection -> Chan UDiskMessage -> Signal -> IO ()
 listenCallback con@(UDCon _ var) chan _ = do
   oldDevices <- takeMVar var
   newDevices <- devicePathList con
-  
+
   let oldSet = S.fromList oldDevices
       newSet = S.fromList newDevices
       added  = newSet \\ oldSet
@@ -159,7 +159,7 @@ listenCallback con@(UDCon _ var) chan _ = do
 
   forM_ (S.toList deleted) $ \d -> do
     writeChan chan (DeviceRemoved d)
-    
+
   putMVar var newDevices
 
 devListenCallback :: UDisksConnection -> Chan UDiskMessage -> Signal -> IO ()

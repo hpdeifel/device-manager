@@ -18,7 +18,7 @@ import qualified Data.Text as T
 import Data.List
 import Data.Maybe (isJust)
 
-import DBus.UDisks
+import DBus.UDisks2
 import Common
 import ErrorLogger
 

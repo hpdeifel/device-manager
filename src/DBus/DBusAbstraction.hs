@@ -14,15 +14,17 @@ module DBus.DBusAbstraction
        , getAllProperties
        , getInterfaces
        , fromVariant'
-       , matchSignal
        , introspect
        , Introspectable(..)
        , Properties(..)
        , JustAPath(..)
+       , MatchRule(..)
+       , matchAny
+       , formatMatchRule
        ) where
 
 import DBus
-import DBus.Client
+import DBus.Client hiding (MatchRule(..), matchAny,formatMatchRule)
 import DBus.Introspection
 
 import Control.Monad
@@ -30,6 +32,7 @@ import Control.Monad
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
+import Data.List
 
 import Control.Exception
 
@@ -99,13 +102,29 @@ getInterfaces client obj = do
 fromVariant' :: (IsVariant a) => Variant -> a
 fromVariant' v = fromMaybe (error ("Variant " ++ show v ++ " failed")) $ fromVariant v
 
-matchSignal :: (SaneDBusObject o) => o -> MemberName -> MatchRule
-matchSignal obj member = matchAny {
-  matchPath        = Just (getObjectPath obj),
-  matchInterface   = Just (getInterface (ifaceOf obj)),
---  matchDestination = Just (getDestination obj),
-  matchMember      = Just member
+data MatchRule = MatchRule {
+  matchSender :: Maybe BusName,
+  matchDestination :: Maybe BusName,
+  matchPath  :: Maybe ObjectPath,
+  matchInterface :: Maybe InterfaceName,
+  matchMember :: Maybe MemberName,
+  matchPathNamespace :: Maybe ObjectPath
 }
+
+matchAny :: MatchRule
+matchAny = MatchRule Nothing Nothing Nothing Nothing Nothing Nothing
+
+formatMatchRule :: MatchRule -> String
+formatMatchRule m = intercalate "," predicates
+  where predicates = catMaybes
+                     [ f "sender" <$> formatBusName <$> matchSender m
+                     , f "destination" <$> formatBusName <$> matchDestination m
+                     , f "path" <$> formatObjectPath <$> matchPath m
+                     , f "interface" <$> formatInterfaceName <$> matchInterface m
+                     , f "member" <$> formatMemberName <$> matchMember m
+                     , f "path_namespace" <$> formatObjectPath <$> matchPathNamespace m
+                     ]
+        f key val = key ++ "='" ++ val ++ "'"
 
 data Properties = Properties
 instance DBusInterface Properties where

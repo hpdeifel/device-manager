@@ -18,14 +18,12 @@ module DBus.DBusAbstraction
        , Introspectable(..)
        , Properties(..)
        , JustAPath(..)
-       , MatchRule(..)
-       , matchAny
-       , formatMatchRule
+       , listenWild
        ) where
 
 import DBus
-import DBus.Client hiding (MatchRule(..), matchAny,formatMatchRule)
-import DBus.Introspection
+import DBus.Client
+import DBus.Introspection hiding (Signal)
 
 import Control.Monad
 
@@ -33,6 +31,8 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.List
+import Data.Unique
+import Data.IORef
 
 import Control.Exception
 
@@ -80,6 +80,15 @@ invoke' client obj iface member args = do
     }
   return $ (head . methodReturnBody) <$> res
 
+-- FIXME This depends on code (matchPathNamespace) is not released in the dbus library.
+-- FIXME Also, we really should match on the sender of the signal, but this is
+-- currently not possible the way, the dbus library is implemented
+listenWild :: Client -> ObjectPath -> (Signal -> IO ()) -> IO SignalHandler
+listenWild client basePath = addMatch client rule
+  where rule = matchAny { matchPathNamespace = Just basePath}
+
+
+
 getProperty :: (SaneDBusObject o, Implements o Properties) => Client -> o -> String -> IO Variant
 getProperty client obj prop = do
   res <- invoke client (obj `using` Properties) "Get" [toVariant (getInterface (ifaceOf obj)), toVariant prop]
@@ -101,30 +110,6 @@ getInterfaces client obj = do
 
 fromVariant' :: (IsVariant a) => Variant -> a
 fromVariant' v = fromMaybe (error ("Variant " ++ show v ++ " failed")) $ fromVariant v
-
-data MatchRule = MatchRule {
-  matchSender :: Maybe BusName,
-  matchDestination :: Maybe BusName,
-  matchPath  :: Maybe ObjectPath,
-  matchInterface :: Maybe InterfaceName,
-  matchMember :: Maybe MemberName,
-  matchPathNamespace :: Maybe ObjectPath
-}
-
-matchAny :: MatchRule
-matchAny = MatchRule Nothing Nothing Nothing Nothing Nothing Nothing
-
-formatMatchRule :: MatchRule -> String
-formatMatchRule m = intercalate "," predicates
-  where predicates = catMaybes
-                     [ f "sender" <$> formatBusName <$> matchSender m
-                     , f "destination" <$> formatBusName <$> matchDestination m
-                     , f "path" <$> formatObjectPath <$> matchPath m
-                     , f "interface" <$> formatInterfaceName <$> matchInterface m
-                     , f "member" <$> formatMemberName <$> matchMember m
-                     , f "path_namespace" <$> formatObjectPath <$> matchPathNamespace m
-                     ]
-        f key val = key ++ "='" ++ val ++ "'"
 
 data Properties = Properties
 instance DBusInterface Properties where

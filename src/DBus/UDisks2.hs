@@ -52,15 +52,14 @@ disconnect :: Connection -> IO ()
 disconnect = DBus.disconnect . conClient
 
 withConnection :: (Connection -> IO ()) -> IO ()
-withConnection body = bracket connect disconnect $
-  body
+withConnection = bracket connect disconnect
 
 connectSignals :: Connection -> IO ()
 connectSignals con = void $ listenWild (conClient con) base print
   where base = "/org/freedesktop/UDisks2"
 
 getInitialObjects :: Connection -> ExceptT Text IO ObjectMap
-getInitialObjects con = do
+getInitialObjects con =
   lift (invoke (conClient con) ObjectManager "GetManagedObjects" []) >>= \case
     Left e -> throwE (Text.pack $ show e)
     Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m

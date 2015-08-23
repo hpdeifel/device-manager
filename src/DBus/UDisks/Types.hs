@@ -177,7 +177,7 @@ fillPartititionIface props = do
 
 fillLoopIface :: PropertyMap -> FillM LoopIface
 fillLoopIface props = do
-  _loopBackingFile <- property' "BackingFile"
+  _loopBackingFile <- decodeUtf8 <$> property' "BackingFile"
   _loopAutoclear <- property' "Autoclear"
   _loopSetupByUID <- property' "SetupByUID"
   return LoopIface{..}

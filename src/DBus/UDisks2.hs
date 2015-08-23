@@ -55,7 +55,7 @@ withConnection :: (Connection -> IO ()) -> IO ()
 withConnection = bracket connect disconnect
 
 connectSignals :: Connection -> IO ()
-connectSignals con = void $ listenWild (conClient con) base print
+connectSignals con = void $ listenWild (conClient con) base (signalHandler con)
   where base = "/org/freedesktop/UDisks2"
 
 getInitialObjects :: Connection -> ExceptT Text IO ObjectMap
@@ -63,6 +63,12 @@ getInitialObjects con =
   lift (invoke (conClient con) ObjectManager "GetManagedObjects" []) >>= \case
     Left e -> throwE (Text.pack $ show e)
     Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m
+
+signalHandler :: Connection -> DBus.Signal -> IO ()
+signalHandler con sig
+  | DBus.signalMember sig == "InterfaceAdded" = return ()
+  | DBus.signalMember sig == "InterfaceRemoved" = return ()
+  | otherwise = return ()
 
 data ObjectManager = ObjectManager
 

@@ -3,8 +3,9 @@
 module DBus.UDisks2
        ( connect
        , disconnect
+       , withConnection
        , Connection
-       , getDeviceList
+       , getInitialObjects
        , Event(..)
        , connectSignals
        , module T
@@ -14,9 +15,14 @@ import DBus.UDisks.Types as T
 import DBus.DBusAbstraction
 
 import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
+import Control.Exception
+
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 import qualified DBus.Client as DBus
-import qualified DBus.Introspection as DBus
 import qualified DBus
 import DBus.Client (Client)
 
@@ -45,48 +51,28 @@ connect = do
 disconnect :: Connection -> IO ()
 disconnect = DBus.disconnect . conClient
 
+withConnection :: (Connection -> IO ()) -> IO ()
+withConnection body = bracket connect disconnect $
+  body
+
 connectSignals :: Connection -> IO ()
 connectSignals con = void $ listenWild (conClient con) base print
   where base = "/org/freedesktop/UDisks2"
 
-getDeviceList :: Connection -> IO [BlockDevice]
-getDeviceList con = do
-  paths <- getDevicePaths con
-  forM paths $ \p -> do
-    props <- getAllProperties (conClient con)  p BlockDeviceIface
-    -- Let's see if it implements the FileSystem interface
-    ifaces <- getInterfaces (conClient con) p
-    -- FIXME: This is of course a TOCTOU race, because the interface could go
-    -- away after we checked if it exists. The fix would probably be to
-    -- unconditionally call getAllProperties and react if it throws a
-    -- DBus.ClientError
-    fsProps <- if fsIface `elem` ifaces
-               then Just <$> getAllProperties (conClient con) p fsIface
-               else return Nothing
-    case propertiesToBlockDevice props fsProps of
-      Left err -> error err -- FIXME: return either
-      Right res -> return res
+getInitialObjects :: Connection -> ExceptT Text IO ObjectMap
+getInitialObjects con = do
+  lift (invoke (conClient con) ObjectManager "GetManagedObjects" []) >>= \case
+    Left e -> throwE (Text.pack $ show e)
+    Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m
 
-  where fsIface = "org.freedesktop.UDisks2.Filesystem"
+data ObjectManager = ObjectManager
 
-getDevicePaths :: Connection -> IO [JustAPath]
-getDevicePaths con = do
-  obj <- introspect (conClient con) DevicePathList
-  return $ map (mkPathObj . DBus.objectPath) (DBus.objectChildren obj)
-
-
-data DevicePathList = DevicePathList
-
-instance DBusObject DevicePathList where
-  type DefaultInterface DevicePathList = Introspectable
-  getObjectPath _ =  "/org/freedesktop/UDisks2/block_devices"
+instance DBusObject ObjectManager where
+  type DefaultInterface ObjectManager = ObjectManager
+  getObjectPath _ = "/org/freedesktop/UDisks2"
   getDestination _ = "org.freedesktop.UDisks2"
 
-instance Implements DevicePathList Introspectable
+instance DBusInterface ObjectManager where
+  getInterface _ = "org.freedesktop.DBus.ObjectManager"
 
-mkPathObj :: DBus.ObjectPath -> JustAPath
-mkPathObj = JustAPath "org.freedesktop.UDisks2"
-
-data BlockDeviceIface = BlockDeviceIface
-instance DBusInterface BlockDeviceIface where
-  getInterface _ = "org.freedesktop.UDisks2.Block"
+instance Implements ObjectManager ObjectManager

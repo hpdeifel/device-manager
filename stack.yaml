@@ -1,0 +1,13 @@
+flags:
+  vty-ui:
+    no-tests: true
+packages:
+  - '.'
+  - location: ../../src/haskell-dbus
+    extra-dep: false
+extra-deps:
+  - dbus-0.10.10
+  - vty-5.2.11
+  - vty-ui-1.9
+  - QuickCheck-2.7.6
+resolver: lts-3.0

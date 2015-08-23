@@ -46,9 +46,8 @@ disconnect :: Connection -> IO ()
 disconnect = DBus.disconnect . conClient
 
 connectSignals :: Connection -> IO ()
-connectSignals con = void $ listenWild (conClient con) name base print
-  where name = "org.freedesktop.UDisks2"
-        base = "/org/freedesktop/UDisks2"
+connectSignals con = void $ listenWild (conClient con) base print
+  where base = "/org/freedesktop/UDisks2"
 
 getDeviceList :: Connection -> IO [BlockDevice]
 getDeviceList con = do

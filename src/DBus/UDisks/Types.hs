@@ -239,6 +239,12 @@ removeFromBlockDevice dev ifaces
                          then assign i Nothing
                          else return ()
 
+-- FIXME This is bullshit. PropertiesChanged doesn't send all properties, but only
+--       those that changed. So we need functions to change only _some_ properties in
+--       interfaces.
+changeBlockDevice :: BlockDevice -> String -> PropertyMap -> FillM BlockDevice
+changeBlockDevice dev iface props = addToBlockDevice dev $ M.singleton iface props
+
 parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
 parseObject path ifaces
   | prefix "block_devices" = BlockDevObject <$> fillBlockDevice ifaces
@@ -260,6 +266,11 @@ removeInterfaces :: Object -> Vector String -> Maybe Object
 removeInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
   removeFromBlockDevice dev ifaces
 removeInterfaces _ _ = Nothing -- TODO
+
+changeProperties :: Object -> String -> PropertyMap -> FillM Object
+changeProperties (BlockDevObject dev) iface props = BlockDevObject <$>
+  changeBlockDevice dev iface props
+changeProperties obj _ _ = return obj
 
 parseObjectMap :: ObjectIfaceMap -> FillM ObjectMap
 parseObjectMap = M.traverseWithKey parseObject

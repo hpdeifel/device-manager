@@ -82,8 +82,8 @@ withConnection :: ((Connection, ObjectMap) -> IO a)
 withConnection body = bracket connect (traverse $ disconnect .fst)
   (traverse body)
 
-nextEvent :: Connection -> IO Event
-nextEvent = atomically . readTQueue . conEventQueue
+nextEvent :: Connection -> STM Event
+nextEvent = readTQueue . conEventQueue
 
 connectSignals :: Client -> TMVar ObjectMap -> TQueue Event
                -> IO DBus.SignalHandler

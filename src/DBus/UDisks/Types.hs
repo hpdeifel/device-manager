@@ -221,11 +221,11 @@ addToBlockDevice dev ifaces = flip execStateT dev $ do
           Just x  -> assign a x
           Nothing -> return ()
 
-removeFromBlockDevice :: BlockDevice -> InterfaceMap -> Maybe BlockDevice
+removeFromBlockDevice :: BlockDevice -> Vector String -> Maybe BlockDevice
 removeFromBlockDevice dev ifaces
   -- The 'Block' Interface is required. If it got removed, return Nothing
-  | blockIface `M.member` ifaces  = Nothing
-  | otherwise                     = Just $ flip execState dev $ do
+  | blockIface `V.elem` ifaces  = Nothing
+  | otherwise                   = Just $ flip execState dev $ do
 
       maybeDelete blockDevFS
       maybeDelete blockDevPartitition
@@ -235,9 +235,9 @@ removeFromBlockDevice dev ifaces
 
         maybeDelete :: forall i. FillIface i => Lens' BlockDevice (Maybe i)
                     -> State BlockDevice ()
-        maybeDelete i = case M.lookup (ifaceName (Proxy :: Proxy i)) ifaces of
-          Just _  -> assign i Nothing
-          Nothing -> return ()
+        maybeDelete i = if V.elem (ifaceName (Proxy :: Proxy i)) ifaces
+                         then assign i Nothing
+                         else return ()
 
 parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
 parseObject path ifaces
@@ -256,7 +256,7 @@ addInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
 addInterfaces obj  _ = return obj
 
 -- Returns Nothing if the last or a required interface was removed from an object
-removeInterfaces :: Object -> InterfaceMap -> Maybe Object
+removeInterfaces :: Object -> Vector String -> Maybe Object
 removeInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
   removeFromBlockDevice dev ifaces
 removeInterfaces _ _ = Nothing -- TODO

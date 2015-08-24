@@ -18,6 +18,7 @@ import Control.Exception
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Map as M
+import Data.Vector (Vector)
 
 import qualified DBus.Client as DBus
 import qualified DBus
@@ -103,6 +104,7 @@ signalHandler _ var events sig
   where member = DBus.signalMember sig
         args = DBus.signalBody sig
         path  = fromVariant' $ args !! 0
+        props :: DBus.IsVariant a => a
         props = fromVariant' $ args !! 1
 
 handleAdded :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath -> InterfaceMap -> IO ()
@@ -127,7 +129,7 @@ handleAdded objMapVar events path ifaces = atomically $ do
 
 
 handleDeleted :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
-              -> InterfaceMap -> IO ()
+              -> Vector String -> IO ()
 handleDeleted objMapVar events path ifaces = atomically $ do
   objMap <- takeTMVar objMapVar
 

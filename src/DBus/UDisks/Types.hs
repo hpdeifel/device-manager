@@ -24,7 +24,7 @@ import Control.Monad.State
 
 import qualified DBus
 import Control.Lens.TH
-import Control.Lens (assign, Lens')
+import Control.Lens (assign, Lens', ASetter, use)
 
 -- TODO Newtype wrapper around DBus.ObjectPath. Something like
 --      ObjectId or something
@@ -121,6 +121,36 @@ parseIdType t = case t of
 parseConfiguration :: Vector (Text, (Map Text DBus.Variant)) -> Configuration
 parseConfiguration = Configuration
 
+changeBlockIface :: BlockIface -> PropertyMap -> FillM BlockIface
+changeBlockIface iface props = flip execStateT iface $ do
+  blockDevice <~? fmap decodeUtf8 <$> property' "Device"
+  blockPreferredDevice <~? fmap decodeUtf8 <$> property' "PreferredDevice"
+  blockSymlinks <~? fmap (fmap decodeUtf8) <$> property' "Symlinks"
+  blockDeviceNumber <~? property' "DeviceNumber"
+  blockDeviceId <~? property' "Id"
+  blockSize <~? property' "Size"
+  blockReadOnly <~? property' "ReadOnly"
+  blockDrive <~? fmap maybeRoot <$> property' "Drive"
+  blockMdRaid <~? fmap maybeRoot <$> property' "MDRaid"
+  blockMdRaidMember <~? fmap maybeRoot <$> property' "MDRaidMember"
+  blockIdUsage <~? property' "IdUsage"
+  blockIdType <~? fmap parseIdType <$> property' "IdType"
+  blockIdVersion <~? property' "IdVersion"
+  blockIdLabel <~? property' "IdLabel"
+  blockIdUUID <~? property' "IdUUID"
+  blockConfiguration <~? fmap parseConfiguration <$> property' "Configuration"
+  blockCryptoBackingDevice <~? fmap maybeRoot <$> property' "CryptoBackingDevice"
+  blockHintPartititionable <~? property' "HintPartitionable"
+  blockHintSystem <~? property' "HintSystem"
+  blockHintIgnore <~? property' "HintIgnore"
+  blockHintAuto <~? property' "HintAuto"
+  blockHintName <~? property' "HintName"
+  blockHintIconName <~? property' "HintIconName"
+  blockHintSymbolicIconName <~? property' "HintSymbolicIconName"
+
+  where property' :: DBus.IsVariant a => String -> StateT BlockIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
+
 fillBlockIface :: PropertyMap -> FillM BlockIface
 fillBlockIface props = do
   -- NOTE We assume here, that the filesystem paths are encoded in utf8
@@ -155,6 +185,13 @@ fillBlockIface props = do
   where property' :: DBus.IsVariant a => String -> Except Text a
         property' = property props
 
+changeFSIface :: FileSystemIface -> PropertyMap -> FillM FileSystemIface
+changeFSIface iface props = flip execStateT iface $ do
+  fsMountPoints <~? fmap (V.map decodeUtf8) <$> property' "MountPoints"
+
+  where property' :: DBus.IsVariant a => String -> StateT FileSystemIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
+
 fillFSIface :: PropertyMap -> FillM FileSystemIface
 fillFSIface props = do
   _fsMountPoints <- V.map decodeUtf8 <$> property' "MountPoints"
@@ -162,6 +199,22 @@ fillFSIface props = do
 
   where property' :: DBus.IsVariant a => String -> Except Text a
         property' = property props
+
+changePartititionIface :: PartititionIface -> PropertyMap -> FillM PartititionIface
+changePartititionIface iface props = flip execStateT iface $ do
+  partititionNumber <~? property' "Number"
+  partititionPartititionType <~? property' "PartititionType"
+  partititionFlags <~? property' "Flags"
+  partititionOffset <~? property' "Offset"
+  partititionSize <~? property' "Size"
+  partititionName <~? property' "Name"
+  partititionUUID <~? property' "UUID"
+  partititionTable <~? property' "Table"
+  partititionIsContainer <~? property' "IsContainer"
+  partititionIsContained <~? property' "IsContained"
+
+  where property' :: DBus.IsVariant a => String -> StateT PartititionIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
 
 fillPartititionIface :: PropertyMap -> FillM PartititionIface
 fillPartititionIface props = do
@@ -179,6 +232,15 @@ fillPartititionIface props = do
 
   where property' :: DBus.IsVariant a => String -> Except Text a
         property' = property props
+
+changeLoopIface :: LoopIface -> PropertyMap -> FillM LoopIface
+changeLoopIface iface props = flip execStateT iface $ do
+  loopBackingFile <~? fmap decodeUtf8 <$> property' "BackingFile"
+  loopAutoclear <~? property' "Autoclear"
+  loopSetupByUID <~? property' "SetupByUID"
+
+  where property' :: DBus.IsVariant a => String -> StateT LoopIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
 
 fillLoopIface :: PropertyMap -> FillM LoopIface
 fillLoopIface props = do
@@ -217,10 +279,6 @@ addToBlockDevice dev ifaces = flip execStateT dev $ do
   where interface' :: (Show i, FillIface i) => StateT BlockDevice FillM (Maybe i)
         interface' = lift $ interface ifaces
 
-        a <~? b = b >>= \case
-          Just x  -> assign a x
-          Nothing -> return ()
-
 removeFromBlockDevice :: BlockDevice -> Vector String -> Maybe BlockDevice
 removeFromBlockDevice dev ifaces
   -- The 'Block' Interface is required. If it got removed, return Nothing
@@ -243,7 +301,27 @@ removeFromBlockDevice dev ifaces
 --       those that changed. So we need functions to change only _some_ properties in
 --       interfaces.
 changeBlockDevice :: BlockDevice -> String -> PropertyMap -> FillM BlockDevice
-changeBlockDevice dev iface props = addToBlockDevice dev $ M.singleton iface props
+changeBlockDevice dev iface props = flip execStateT dev $ do
+  changeInterface blockDevBlock
+  changeInterfaceM blockDevFS
+  changeInterfaceM blockDevPartitition
+  changeInterfaceM blockDevLoop
+
+  where changeInterface :: forall i. FillIface i => Lens' BlockDevice i -> StateT BlockDevice FillM ()
+        changeInterface i
+          | ifaceName (Proxy :: Proxy i) == iface = do
+              use i >>= lift . flip changeIface props >>= assign i
+          | otherwise = return ()
+
+        changeInterfaceM :: forall i. FillIface i => Lens' BlockDevice (Maybe i) -> StateT BlockDevice FillM ()
+        changeInterfaceM i
+          | ifaceName (Proxy :: Proxy i) == iface = use i >>= \case
+              Just i' -> lift (Just <$> changeIface i' props) >>= assign i
+              -- Interface wasn't present. If we try to change it, we cannot try
+              -- to change it, since we only know the changed properties and not
+              -- the rest.
+              Nothing -> return ()
+          | otherwise = return ()
 
 parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
 parseObject path ifaces
@@ -287,82 +365,53 @@ type InterfaceMap = Map String PropertyMap
 type FillM = Except Text
 
 property :: DBus.IsVariant a => PropertyMap -> String -> FillM a
-property m k = case M.lookup k m of
-  Just x -> maybeVariant x
+property m k = maybeProperty m k >>= \case
+  Just x -> return x
   Nothing -> throwE $ notfound k
 
-  where maybeVariant v = case DBus.fromVariant v of
+  where notfound :: String -> Text
+        notfound p = "Expected property " <> T.pack p <> " but it wasn't there"
+
+
+maybeProperty :: DBus.IsVariant a => PropertyMap -> String -> FillM (Maybe a)
+maybeProperty m k = traverse maybeVariant $ M.lookup k m
+
+  where maybeVariant :: DBus.IsVariant a => DBus.Variant -> FillM a
+        maybeVariant v = case DBus.fromVariant v of
           Nothing -> throwE $ conversion v
           Just v' -> return v'
 
-        notfound :: String -> Text
-        notfound p = "Expected property " <> T.pack p <> " but it wasn't there"
         conversion v = "Failed type conversion for: " <> T.pack (show v) <> " (Property "
                        <> T.pack k <> ")"
 
 class FillIface i where
   fillIface :: PropertyMap -> FillM i
+  changeIface :: i -> PropertyMap -> FillM i
   ifaceName :: Proxy i -> String
 
 instance FillIface BlockIface where
   fillIface = fillBlockIface
+  changeIface = changeBlockIface
   ifaceName _ = "org.freedesktop.UDisks2.Block"
 
 instance FillIface FileSystemIface where
   fillIface = fillFSIface
+  changeIface = changeFSIface
   ifaceName _ = "org.freedesktop.UDisks2.Filesystem"
 
 instance FillIface PartititionIface where
   fillIface = fillPartititionIface
+  changeIface = changePartititionIface
   ifaceName _ = "org.freedesktop.UDisks2.Partitition"
 
 instance FillIface LoopIface where
   fillIface = fillLoopIface
+  changeIface = changeLoopIface
   ifaceName _ =  "org.freedesktop.UDisks2.Loop"
 
 interface :: forall i. FillIface i => InterfaceMap -> FillM (Maybe i)
 interface ifaces = maybe (return Nothing) (fmap Just . fillIface) $ M.lookup key ifaces
   where key = ifaceName (Proxy :: Proxy i)
-
--- propertiesToBlockDevice :: PropMap -> Maybe PropMap -> Either String BlockDevice
--- propertiesToBlockDevice m fsMap = do
---   filesystem <- traverse fillFileSystem fsMap
---   fillDevice m filesystem
-
--- fillFileSystem :: PropMap -> Either String FileSystem
--- fillFileSystem m =
---   FileSystem <$> fmap decodeUtf8 <$> property m "MountPoints"
-
--- fillDevice :: PropMap -> Maybe FileSystem -> Either String BlockDevice
--- fillDevice m isFileSystem = do
---   -- NOTE We assume here, that the filesystem paths are encoded in utf8
---   -- This may of course be violated on some systems, but those may not
---   -- be worthwhile to support for a udisks helper program
---   device <- decodeUtf8 <$> property' "Device"
---   preferredDevice <- decodeUtf8 <$> property' "PreferredDevice"
---   symlinks <- fmap decodeUtf8 <$> property' "Symlinks"
---   deviceNumber <- property' "DeviceNumber"
---   deviceId <- property' "Id"
---   size <- property' "Size"
---   readOnly <- property' "ReadOnly"
---   drive <- Drive <$> property' "Drive"
---   idUsage <- property' "IdUsage"
---   idType <- property' "IdType"
---   idVersion <- property' "IdVersion"
---   idLabel <- property' "IdLabel"
---   idUUID <- property' "IdUUID"
---   hintPartititionable <- property' "HintPartitionable"
---   hintSystem <- property' "HintSystem"
---   hintIgnore <- property' "HintIgnore"
---   hintAuto <- property' "HintAuto"
---   hintName <- property' "HintName"
---   hintIconName <- property' "HintIconName"
---   hintSymbolicIconName <- property' "HintSymbolicIconName"
-
---   return BlockDev {..}
-
---   where property' :: DBus.IsVariant a => String -> Either String a
---         property' = property m
 
 decodeUtf8 :: ByteString -> Text
 decodeUtf8 = T.decodeUtf8 . B.filter (not.nullbyte)
@@ -372,3 +421,9 @@ maybeRoot :: DBus.ObjectPath -> Maybe DBus.ObjectPath
 maybeRoot p
   | p == "/"  = Nothing
   | otherwise = Just p
+
+infix 3 <~?
+(<~?) :: MonadState s m => ASetter s s a b -> m (Maybe b) -> m ()
+a <~? b = b >>= \case
+  Just x  -> assign a x
+  Nothing -> return ()

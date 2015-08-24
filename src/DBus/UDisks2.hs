@@ -1,10 +1,11 @@
 {-# LANGUAGE LambdaCase, OverloadedStrings, TypeFamilies, MultiParamTypeClasses #-}
 
 module DBus.UDisks2
-       ( connect
+       ( Connection
+       , connect
        , disconnect
        , withConnection
-       , Connection
+       , Event(..)
        , nextEvent
        ) where
 

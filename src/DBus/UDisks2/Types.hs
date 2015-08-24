@@ -3,7 +3,7 @@
 
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
-module DBus.UDisks.Types where
+module DBus.UDisks2.Types where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B

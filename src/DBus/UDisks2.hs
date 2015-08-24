@@ -8,7 +8,7 @@ module DBus.UDisks2
        , nextEvent
        ) where
 
-import DBus.UDisks.Types as T
+import DBus.UDisks2.Types as T
 import DBus.DBusAbstraction
 
 import Control.Monad.Trans.Class

@@ -19,7 +19,7 @@ Executable devman
   if flag(udisks2)
     Buildable: False
   Main-Is:             Main.hs
-  Other-modules:       DBus.UDisks.Types
+  Other-modules:       DBus.UDisks2.Types
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
                        containers ==0.5.*,
@@ -36,7 +36,7 @@ Executable devnotify
   if flag(udisks2)
     Buildable: False
   Main-Is:             Notifications.hs
-  Other-modules:       DBus.UDisks.Types
+  Other-modules:       DBus.UDisks2.Types
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
                        containers ==0.5.*,
@@ -59,6 +59,6 @@ Executable udisks2test
                        stm ==2.4.*,
                        mtl ==2.2.*
   Main-Is:             UDisks2Main.hs
-  Other-Modules:       DBus.UDisks.Types,
+  Other-Modules:       DBus.UDisks2.Types,
                        DBus.DBusAbstraction,
                        DBus.UDisks2

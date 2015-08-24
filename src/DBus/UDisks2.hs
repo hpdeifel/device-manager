@@ -5,67 +5,89 @@ module DBus.UDisks2
        , disconnect
        , withConnection
        , Connection
-       , getInitialObjects
-       , Event(..)
-       , connectSignals
-       , module T
        ) where
 
 import DBus.UDisks.Types as T
 import DBus.DBusAbstraction
 
-import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Exception
 
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Map as M
 
 import qualified DBus.Client as DBus
 import qualified DBus
 import DBus.Client (Client)
 
+import Control.Concurrent.STM
+
 -- Types
 
+data Event = InterfaceAdded | InterfaceRemoved | PropertyChanged
+           deriving (Show)
+
 data Connection = Con {
-  conClient :: Client
+  conClient :: Client,
+  conObjectMap :: TMVar ObjectMap,
+  conEventQueue :: TQueue Event,
+  conSigHandler :: DBus.SignalHandler
 }
 
-newtype DeviceId = DeviceId DBus.ObjectPath
-                 deriving (Show)
+connect :: IO (Either Text (Connection, ObjectMap, TQueue Event))
+connect = runExceptT $ do
+  client <- lift DBus.connectSystem
+  var    <- lift newEmptyTMVarIO
+  events <- lift newTQueueIO
 
-data Event = DeviceAdded BlockDevice
-                 | DeviceChanged BlockDevice
-                 | DeviceRemoved DeviceId
+  sigHandler <- lift $ connectSignals client var events
 
-connect :: IO Connection
-connect = do
-  client <- DBus.connectSystem
-  let con = Con
-            { conClient = client
-            }
+  let cleanup e = do
+        -- If the initial Objects can't be retrieved, but signal handlers have
+        -- already been called, those would block forever waiting for the
+        -- objMap. Thus we give them an empty one.
+        lift $ atomically $ putTMVar var M.empty
+        throwE e
 
-  return con
+  objMap <- getInitialObjects client
+            `catchE` cleanup
+
+  lift $ atomically $ putTMVar var objMap
+
+  let con =  Con { conClient = client
+                 , conObjectMap = var
+                 , conEventQueue = events
+                 , conSigHandler = sigHandler
+                 }
+
+  return (con, objMap, events)
 
 disconnect :: Connection -> IO ()
-disconnect = DBus.disconnect . conClient
+disconnect con = do
+  DBus.removeMatch (conClient con) (conSigHandler con)
+  DBus.disconnect $ conClient con
 
-withConnection :: (Connection -> IO ()) -> IO ()
-withConnection = bracket connect disconnect
+withConnection :: ((Connection, ObjectMap, TQueue Event) -> IO a)
+               -> IO (Either Text a)
+withConnection body = bracket connect (traverse (\(c,_,_) -> disconnect c))
+  (traverse body)
 
-connectSignals :: Connection -> IO ()
-connectSignals con = void $ listenWild (conClient con) base (signalHandler con)
+connectSignals :: Client -> TMVar ObjectMap -> TQueue Event
+               -> IO DBus.SignalHandler
+connectSignals client var queue = listenWild client base handler
   where base = "/org/freedesktop/UDisks2"
+        handler = signalHandler client var queue
 
-getInitialObjects :: Connection -> ExceptT Text IO ObjectMap
-getInitialObjects con =
-  lift (invoke (conClient con) ObjectManager "GetManagedObjects" []) >>= \case
+getInitialObjects :: Client -> ExceptT Text IO ObjectMap
+getInitialObjects client =
+  lift (invoke client ObjectManager "GetManagedObjects" []) >>= \case
     Left e -> throwE (Text.pack $ show e)
     Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m
 
-signalHandler :: Connection -> DBus.Signal -> IO ()
-signalHandler con sig
+signalHandler :: Client -> TMVar ObjectMap -> TQueue Event -> DBus.Signal -> IO ()
+signalHandler client var event sig
   | DBus.signalMember sig == "InterfaceAdded" = return ()
   | DBus.signalMember sig == "InterfaceRemoved" = return ()
   | otherwise = return ()

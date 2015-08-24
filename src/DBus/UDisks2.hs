@@ -30,9 +30,9 @@ import Debug.Trace
 
 -- Types
 
-data Event = ObjectAdded DBus.ObjectPath Object
-           | ObjectRemoved DBus.ObjectPath
-           | ObjectChanged DBus.ObjectPath Object
+data Event = ObjectAdded ObjectId Object
+           | ObjectRemoved ObjectId
+           | ObjectChanged ObjectId Object
            deriving (Show)
 
 data Connection = Con {
@@ -72,6 +72,7 @@ connect = runExceptT $ do
 
 disconnect :: Connection -> IO ()
 disconnect con = do
+  atomically $ takeTMVar (conObjectMap con)
   DBus.removeMatch (conClient con) (conSigHandler con)
   DBus.disconnect $ conClient con
 
@@ -141,14 +142,14 @@ handleAdded objMapVar events path ifaces = atomically $ do
     Nothing -> case runExcept $ parseObject objId ifaces of
       Left _ -> return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
-        writeTQueue events $ ObjectAdded path newObj
+        writeTQueue events $ ObjectAdded objId newObj
         return $ M.insert objId newObj objMap
 
     -- Object present, modify it
     Just oldObj -> case runExcept $ addInterfaces oldObj ifaces of
       Left e -> traceShow e $ return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
-        writeTQueue events $ ObjectChanged path newObj
+        writeTQueue events $ ObjectChanged objId newObj
         return $ M.insert objId newObj objMap
 
 
@@ -168,11 +169,11 @@ handleDeleted objMapVar events path ifaces = atomically $ do
     Just oldObj -> case removeInterfaces oldObj ifaces of
       -- Object was completely removed
       Nothing -> do
-        writeTQueue events $ ObjectRemoved path
+        writeTQueue events $ ObjectRemoved objId
         return $ M.delete objId objMap
 
       Just newObj -> do
-        writeTQueue events $ ObjectChanged path newObj
+        writeTQueue events $ ObjectChanged objId newObj
         return $ M.insert objId newObj objMap
 
 handleChanged :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
@@ -190,7 +191,7 @@ handleChanged objMapVar events path iface props = atomically $ do
     Just oldObj -> case runExcept $ changeProperties oldObj iface props of
       Left _ -> return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
-        writeTQueue events $ ObjectChanged path newObj
+        writeTQueue events $ ObjectChanged objId newObj
         return $ M.insert objId newObj objMap
 
 data ObjectManager = ObjectManager

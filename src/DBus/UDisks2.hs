@@ -5,6 +5,7 @@ module DBus.UDisks2
        , disconnect
        , withConnection
        , Connection
+       , nextEvent
        ) where
 
 import DBus.UDisks.Types as T
@@ -36,7 +37,7 @@ data Connection = Con {
   conSigHandler :: DBus.SignalHandler
 }
 
-connect :: IO (Either Text (Connection, ObjectMap, TQueue Event))
+connect :: IO (Either Text (Connection, ObjectMap))
 connect = runExceptT $ do
   client <- lift DBus.connectSystem
   var    <- lift newEmptyTMVarIO
@@ -62,17 +63,20 @@ connect = runExceptT $ do
                  , conSigHandler = sigHandler
                  }
 
-  return (con, objMap, events)
+  return (con, objMap)
 
 disconnect :: Connection -> IO ()
 disconnect con = do
   DBus.removeMatch (conClient con) (conSigHandler con)
   DBus.disconnect $ conClient con
 
-withConnection :: ((Connection, ObjectMap, TQueue Event) -> IO a)
+withConnection :: ((Connection, ObjectMap) -> IO a)
                -> IO (Either Text a)
-withConnection body = bracket connect (traverse (\(c,_,_) -> disconnect c))
+withConnection body = bracket connect (traverse $ disconnect .fst)
   (traverse body)
+
+nextEvent :: Connection -> IO Event
+nextEvent = atomically . readTQueue . conEventQueue
 
 connectSignals :: Client -> TMVar ObjectMap -> TQueue Event
                -> IO DBus.SignalHandler

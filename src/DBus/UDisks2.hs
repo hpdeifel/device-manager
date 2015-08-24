@@ -125,28 +125,31 @@ getInitialObjects :: Client -> ExceptT Text IO ObjectMap
 getInitialObjects client =
   lift (invoke client ObjectManager "GetManagedObjects" []) >>= \case
     Left e -> throwE (Text.pack $ show e)
-    Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m
+    Right m -> ExceptT $ return $ runExcept $ parseObjectMap $
+                 M.mapKeys ObjectId $ fromVariant' m
 
 
 handleAdded :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath -> InterfaceMap -> IO ()
 handleAdded objMapVar events path ifaces = atomically $ do
   objMap <- takeTMVar objMapVar
 
-  putTMVar objMapVar =<< case M.lookup path objMap of
+  let objId = ObjectId path
+
+  putTMVar objMapVar =<< case M.lookup objId objMap of
 
     -- Object not yet present, must be new
-    Nothing -> case runExcept $ parseObject path ifaces of
+    Nothing -> case runExcept $ parseObject objId ifaces of
       Left _ -> return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
         writeTQueue events $ ObjectAdded path newObj
-        return $ M.insert path newObj objMap
+        return $ M.insert objId newObj objMap
 
     -- Object present, modify it
     Just oldObj -> case runExcept $ addInterfaces oldObj ifaces of
       Left e -> traceShow e $ return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
         writeTQueue events $ ObjectChanged path newObj
-        return $ M.insert path newObj objMap
+        return $ M.insert objId newObj objMap
 
 
 handleDeleted :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
@@ -154,7 +157,9 @@ handleDeleted :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
 handleDeleted objMapVar events path ifaces = atomically $ do
   objMap <- takeTMVar objMapVar
 
-  putTMVar objMapVar =<< case M.lookup path objMap of
+  let objId = ObjectId path
+
+  putTMVar objMapVar =<< case M.lookup objId objMap of
 
     -- Interfaces on unknown object removed. Igore.
     Nothing -> return objMap
@@ -164,18 +169,20 @@ handleDeleted objMapVar events path ifaces = atomically $ do
       -- Object was completely removed
       Nothing -> do
         writeTQueue events $ ObjectRemoved path
-        return $ M.delete path objMap
+        return $ M.delete objId objMap
 
       Just newObj -> do
         writeTQueue events $ ObjectChanged path newObj
-        return $ M.insert path newObj objMap
+        return $ M.insert objId newObj objMap
 
 handleChanged :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
               -> String -> PropertyMap -> IO ()
 handleChanged objMapVar events path iface props = atomically $ do
   objMap <- takeTMVar objMapVar
 
-  putTMVar objMapVar =<< case M.lookup path objMap of
+  let objId = ObjectId path
+
+  putTMVar objMapVar =<< case M.lookup objId objMap of
 
     -- We don't know this object. Something is wrong
     Nothing -> return objMap -- TODO Handle error (maybe log it)
@@ -184,7 +191,7 @@ handleChanged objMapVar events path iface props = atomically $ do
       Left _ -> return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
         writeTQueue events $ ObjectChanged path newObj
-        return $ M.insert path newObj objMap
+        return $ M.insert objId newObj objMap
 
 data ObjectManager = ObjectManager
 

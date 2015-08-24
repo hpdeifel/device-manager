@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings, TemplateHaskell #-}
 {-# LANGUAGE LambdaCase, ScopedTypeVariables, RankNTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
@@ -18,6 +19,7 @@ import Data.Map (Map)
 import Data.Monoid
 import Data.Proxy
 import Data.List (isPrefixOf)
+import Data.String
 
 import Control.Monad.Trans.Except
 import Control.Monad.State
@@ -36,8 +38,8 @@ import Control.Lens (assign, Lens', ASetter, use)
 -- something, but not if we only failed to change something. So if we reduce the
 -- first case to the second, we would lose warnings.
 
--- TODO Newtype wrapper around DBus.ObjectPath. Something like
---      ObjectId or something
+newtype ObjectId = ObjectId DBus.ObjectPath
+                 deriving (Show, Eq, Ord, IsString)
 
 -- Used for the IdType property of the Block interface
 data IdType = IdFilesystem | IdCrypto | IdRaid | IdOther Text
@@ -55,16 +57,16 @@ data BlockIface = BlockIface {
   _blockDeviceId :: Text,
   _blockSize :: Word64,
   _blockReadOnly :: Bool,
-  _blockDrive :: Maybe DBus.ObjectPath, -- "/" means Nothing
-  _blockMdRaid :: Maybe DBus.ObjectPath, -- "/" means Nothing
-  _blockMdRaidMember :: Maybe DBus.ObjectPath, -- "/" means Nothing
+  _blockDrive :: Maybe ObjectId, -- "/" means Nothing
+  _blockMdRaid :: Maybe ObjectId, -- "/" means Nothing
+  _blockMdRaidMember :: Maybe ObjectId, -- "/" means Nothing
   _blockIdUsage :: Text,
   _blockIdType :: IdType,
   _blockIdVersion :: Text,
   _blockIdLabel :: Text,
   _blockIdUUID :: Text,
   _blockConfiguration :: Configuration,
-  _blockCryptoBackingDevice :: Maybe DBus.ObjectPath,
+  _blockCryptoBackingDevice :: Maybe ObjectId,
   _blockHintPartititionable :: Bool,
   _blockHintSystem :: Bool,
   _blockHintIgnore :: Bool,
@@ -90,7 +92,7 @@ data PartititionIface = PartititionIface {
   _partititionSize :: Word64,
   _partititionName :: Text,
   _partititionUUID :: Text,
-  _partititionTable :: DBus.ObjectPath,
+  _partititionTable :: ObjectId,
   _partititionIsContainer :: Bool,
   _partititionIsContained :: Bool
 } deriving (Show)
@@ -118,7 +120,7 @@ data Object = BlockDevObject BlockDevice
             | DriveObject
             | MDRaidObject
             | JobObject
-            | OtherObject DBus.ObjectPath
+            | OtherObject ObjectId
             deriving (Show)
 
 parseIdType :: Text -> IdType
@@ -140,16 +142,16 @@ changeBlockIface iface props = flip execStateT iface $ do
   blockDeviceId <~? property' "Id"
   blockSize <~? property' "Size"
   blockReadOnly <~? property' "ReadOnly"
-  blockDrive <~? fmap maybeRoot <$> property' "Drive"
-  blockMdRaid <~? fmap maybeRoot <$> property' "MDRaid"
-  blockMdRaidMember <~? fmap maybeRoot <$> property' "MDRaidMember"
+  blockDrive <~? fmap (maybeRoot.ObjectId) <$> property' "Drive"
+  blockMdRaid <~? fmap (maybeRoot.ObjectId) <$> property' "MDRaid"
+  blockMdRaidMember <~? fmap (maybeRoot.ObjectId) <$> property' "MDRaidMember"
   blockIdUsage <~? property' "IdUsage"
   blockIdType <~? fmap parseIdType <$> property' "IdType"
   blockIdVersion <~? property' "IdVersion"
   blockIdLabel <~? property' "IdLabel"
   blockIdUUID <~? property' "IdUUID"
   blockConfiguration <~? fmap parseConfiguration <$> property' "Configuration"
-  blockCryptoBackingDevice <~? fmap maybeRoot <$> property' "CryptoBackingDevice"
+  blockCryptoBackingDevice <~? fmap (maybeRoot.ObjectId) <$> property' "CryptoBackingDevice"
   blockHintPartititionable <~? property' "HintPartitionable"
   blockHintSystem <~? property' "HintSystem"
   blockHintIgnore <~? property' "HintIgnore"
@@ -173,16 +175,16 @@ fillBlockIface props = do
   _blockDeviceId <- property' "Id"
   _blockSize <- property' "Size"
   _blockReadOnly <- property' "ReadOnly"
-  _blockDrive <- maybeRoot <$> property' "Drive"
-  _blockMdRaid <- maybeRoot <$> property' "MDRaid"
-  _blockMdRaidMember <- maybeRoot <$> property' "MDRaidMember"
+  _blockDrive <- maybeRoot.ObjectId <$> property' "Drive"
+  _blockMdRaid <- maybeRoot.ObjectId <$> property' "MDRaid"
+  _blockMdRaidMember <- maybeRoot.ObjectId <$> property' "MDRaidMember"
   _blockIdUsage <- property' "IdUsage"
   _blockIdType <- parseIdType <$> property' "IdType"
   _blockIdVersion <- property' "IdVersion"
   _blockIdLabel <- property' "IdLabel"
   _blockIdUUID <- property' "IdUUID"
   _blockConfiguration <- parseConfiguration <$> property' "Configuration"
-  _blockCryptoBackingDevice <- maybeRoot <$> property' "CryptoBackingDevice"
+  _blockCryptoBackingDevice <- maybeRoot.ObjectId <$> property' "CryptoBackingDevice"
   _blockHintPartititionable <- property' "HintPartitionable"
   _blockHintSystem <- property' "HintSystem"
   _blockHintIgnore <- property' "HintIgnore"
@@ -219,7 +221,7 @@ changePartititionIface iface props = flip execStateT iface $ do
   partititionSize <~? property' "Size"
   partititionName <~? property' "Name"
   partititionUUID <~? property' "UUID"
-  partititionTable <~? property' "Table"
+  partititionTable <~? fmap ObjectId <$> property' "Table"
   partititionIsContainer <~? property' "IsContainer"
   partititionIsContained <~? property' "IsContained"
 
@@ -235,7 +237,7 @@ fillPartititionIface props = do
   _partititionSize <- property' "Size"
   _partititionName <- property' "Name"
   _partititionUUID <- property' "UUID"
-  _partititionTable <- property' "Table"
+  _partititionTable <- ObjectId <$> property' "Table"
   _partititionIsContainer <- property' "IsContainer"
   _partititionIsContained <- property' "IsContained"
   return PartititionIface{..}
@@ -333,13 +335,13 @@ changeBlockDevice dev iface props = flip execStateT dev $ do
               Nothing -> return ()
           | otherwise = return ()
 
-parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
-parseObject path ifaces
+parseObject :: ObjectId -> InterfaceMap -> FillM Object
+parseObject (ObjectId path) ifaces
   | prefix "block_devices" = BlockDevObject <$> fillBlockDevice ifaces
   | prefix "drives"        = return DriveObject
   | prefix "mdraid"        = return MDRaidObject
   | prefix "jobs"          = return JobObject
-  | otherwise              = return $ OtherObject path
+  | otherwise              = return $ OtherObject $ ObjectId path
 
   where path' = DBus.formatObjectPath path
         prefix pre = ("/org/freedesktop/UDisks2/" ++ pre ++ "/") `isPrefixOf` path'
@@ -363,9 +365,9 @@ changeProperties obj _ _ = return obj
 parseObjectMap :: ObjectIfaceMap -> FillM ObjectMap
 parseObjectMap = M.traverseWithKey parseObject
 
-type ObjectIfaceMap = Map DBus.ObjectPath InterfaceMap
+type ObjectIfaceMap = Map ObjectId InterfaceMap
 
-type ObjectMap = Map DBus.ObjectPath Object
+type ObjectMap = Map ObjectId Object
 
 type PropertyMap = Map String DBus.Variant
 
@@ -427,7 +429,7 @@ decodeUtf8 :: ByteString -> Text
 decodeUtf8 = T.decodeUtf8 . B.filter (not.nullbyte)
   where nullbyte = (==0)
 
-maybeRoot :: DBus.ObjectPath -> Maybe DBus.ObjectPath
+maybeRoot :: ObjectId -> Maybe ObjectId
 maybeRoot p
   | p == "/"  = Nothing
   | otherwise = Just p

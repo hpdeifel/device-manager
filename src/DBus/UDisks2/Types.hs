@@ -20,6 +20,7 @@ import Data.Monoid
 import Data.Proxy
 import Data.List (isPrefixOf)
 import Data.String
+import Data.Int
 
 import Control.Monad.Trans.Except
 import Control.Monad.State
@@ -115,6 +116,75 @@ data BlockDevice = BlockDevice {
 } deriving (Show)
 
 makeLenses ''BlockDevice
+
+data DriveIface = DriveIface {
+  _driveIVendor :: Text,
+  _driveIModel :: Text,
+  _driveIRevision :: Text,
+  _driveISerial :: Text,
+  _driveIWwn :: Text,
+  _driveIId :: Text,
+  _driveIConfiguration :: Map Text DBus.Variant,
+  _driveIMedia :: Text,
+  _driveIMediaCompatibility :: Vector Text,
+  _driveIMediaRemovable :: Bool,
+  _driveIMediaAvailable :: Bool,
+  _driveIMediaChangeDetected :: Bool,
+  _driveISize :: Word64,
+  _driveITimeDetected :: Word64,
+  _driveITimeMediaDetected :: Word64,
+  _driveIOptical :: Bool,
+  _driveIOpticalBlank :: Bool,
+  _driveIOpticalNumTracks :: Word32,
+  _driveIOpticalNumAudioTracks :: Word32,
+  _driveIOpticalNumDataTracks  :: Word32,
+  _driveIOpticalNumSessions :: Word32,
+  _driveIRotationRate :: Int32,
+  _driveIConnectionBus :: Text,
+  _driveISeat :: Text,
+  _driveIRemovable :: Bool,
+  _driveIEjectable :: Bool,
+  _driveISortKey :: Text,
+  _driveICanPowerOff :: Bool,
+  _driveISiblingId :: Text
+} deriving (Show)
+
+makeLenses ''DriveIface
+
+data AtaIface = AtaIface {
+  _ataSmartSupported :: Bool,
+  _ataSmartEnabled :: Bool,
+  _ataSmartUpdated :: Word64,
+  _ataSmartFailing :: Bool,
+  _ataSmartPowerOnSeconds :: Word64,
+  _ataSmartTemperature :: Double,
+  _ataSmartNumAttributesFailing :: Int32,
+  _ataSmartNumAttributesFailedInThePast :: Int32,
+  _ataSmartNumBadSectors :: Int64,
+  _ataSmartSelftestStatus :: Text,
+  _ataSmartSelftestPercentRemaining :: Int,
+  _ataPmSupported :: Bool,
+  _ataPmEnabled :: Bool,
+  _ataApmSupported :: Bool,
+  _ataApmEnabled :: Bool,
+  _ataAamSupported :: Bool,
+  _ataAamEnabled :: Bool,
+  _ataAamVendorRecommendedValue :: Int,
+  _ataWriteCacheSupported :: Bool,
+  _ataWriteCacheEnabled :: Bool,
+  _ataSecurityEraseUnitMinutes :: Int,
+  _ataSecurityEnhancedEraseUnitMinutes :: Int,
+  _ataSecurityFrozen :: Bool
+} deriving (Show)
+
+makeLenses ''AtaIface
+
+data Drive = Drive {
+  _driveDrive :: DriveIface,
+  _driveAta :: Maybe AtaIface
+} deriving (Show)
+
+makeLenses ''Drive
 
 data Object = BlockDevObject BlockDevice
             | DriveObject

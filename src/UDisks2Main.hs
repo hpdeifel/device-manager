@@ -3,10 +3,11 @@ module Main where
 
 import DBus.UDisks2
 import Control.Monad
+import Control.Concurrent.STM (atomically)
 
 main :: IO ()
 main = void $ withConnection $ \(con, objMap) -> do
   print objMap
   forever $ do
-    nextEvent con >>= print
+    atomically (nextEvent con) >>= print
     putStrLn ""

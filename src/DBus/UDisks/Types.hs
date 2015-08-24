@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings, TemplateHaskell #-}
-{-# LANGUAGE LambdaCase, ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase, ScopedTypeVariables, RankNTypes #-}
 
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
@@ -24,7 +24,10 @@ import Control.Monad.State
 
 import qualified DBus
 import Control.Lens.TH
-import Control.Lens (assign)
+import Control.Lens (assign, Lens')
+
+-- TODO Newtype wrapper around DBus.ObjectPath. Something like
+--      ObjectId or something
 
 -- Used for the IdType property of the Block interface
 data IdType = IdFilesystem | IdCrypto | IdRaid | IdOther Text
@@ -211,13 +214,29 @@ addToBlockDevice dev ifaces = flip execStateT dev $ do
   blockDevPartitition <~? fmap Just interface'
   blockDevLoop <~? fmap Just interface'
 
-  return ()
-
   where interface' :: (Show i, FillIface i) => StateT BlockDevice FillM (Maybe i)
         interface' = lift $ interface ifaces
 
         a <~? b = b >>= \case
           Just x  -> assign a x
+          Nothing -> return ()
+
+removeFromBlockDevice :: BlockDevice -> InterfaceMap -> Maybe BlockDevice
+removeFromBlockDevice dev ifaces
+  -- The 'Block' Interface is required. If it got removed, return Nothing
+  | blockIface `M.member` ifaces  = Nothing
+  | otherwise                     = Just $ flip execState dev $ do
+
+      maybeDelete blockDevFS
+      maybeDelete blockDevPartitition
+      maybeDelete blockDevLoop
+
+  where blockIface = ifaceName (Proxy :: Proxy BlockIface)
+
+        maybeDelete :: forall i. FillIface i => Lens' BlockDevice (Maybe i)
+                    -> State BlockDevice ()
+        maybeDelete i = case M.lookup (ifaceName (Proxy :: Proxy i)) ifaces of
+          Just _  -> assign i Nothing
           Nothing -> return ()
 
 parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
@@ -235,6 +254,12 @@ addInterfaces :: Object -> InterfaceMap -> FillM Object
 addInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
   addToBlockDevice dev ifaces
 addInterfaces obj  _ = return obj
+
+-- Returns Nothing if the last or a required interface was removed from an object
+removeInterfaces :: Object -> InterfaceMap -> Maybe Object
+removeInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
+  removeFromBlockDevice dev ifaces
+removeInterfaces _ _ = Nothing -- TODO
 
 parseObjectMap :: ObjectIfaceMap -> FillM ObjectMap
 parseObjectMap = M.traverseWithKey parseObject

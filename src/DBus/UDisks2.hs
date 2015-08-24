@@ -97,12 +97,12 @@ getInitialObjects client =
 signalHandler :: Client -> TMVar ObjectMap -> TQueue Event -> DBus.Signal -> IO ()
 signalHandler _ var events sig
   | member == "InterfacesAdded" = handleAdded var events path props
-  | member == "InterfacesRemoved" = return ()
+  | member == "InterfacesRemoved" = handleDeleted var events path props
   | otherwise = return ()
 
   where member = DBus.signalMember sig
         args = DBus.signalBody sig
-        path = fromVariant' $ args !! 0
+        path  = fromVariant' $ args !! 0
         props = fromVariant' $ args !! 1
 
 handleAdded :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath -> InterfaceMap -> IO ()
@@ -125,7 +125,27 @@ handleAdded objMapVar events path ifaces = atomically $ do
         writeTQueue events $ ObjectChanged path newObj
         return $ M.insert path newObj objMap
 
-  return ()
+
+handleDeleted :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath
+              -> InterfaceMap -> IO ()
+handleDeleted objMapVar events path ifaces = atomically $ do
+  objMap <- takeTMVar objMapVar
+
+  putTMVar objMapVar =<< case M.lookup path objMap of
+
+    -- Interfaces on unknown object removed. Igore.
+    Nothing -> return objMap
+
+    -- Ok, we know the object \o/
+    Just oldObj -> case removeInterfaces oldObj ifaces of
+      -- Object was completely removed
+      Nothing -> do
+        writeTQueue events $ ObjectRemoved path
+        return $ M.delete path objMap
+
+      Just newObj -> do
+        writeTQueue events $ ObjectChanged path newObj
+        return $ M.insert path newObj objMap
 
 data ObjectManager = ObjectManager
 

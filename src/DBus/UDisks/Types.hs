@@ -26,6 +26,16 @@ import qualified DBus
 import Control.Lens.TH
 import Control.Lens (assign, Lens', ASetter, use)
 
+-- TODO This module contains a lot of duplication.
+--
+-- For example, we always have two functions fill* and change* that do almost
+-- the same. The first one initially creates an object, the second one changes
+-- some properties on it.
+--
+-- The reason for this is that we get warnings if we forgot to initialize
+-- something, but not if we only failed to change something. So if we reduce the
+-- first case to the second, we would lose warnings.
+
 -- TODO Newtype wrapper around DBus.ObjectPath. Something like
 --      ObjectId or something
 

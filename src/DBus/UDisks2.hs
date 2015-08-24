@@ -25,9 +25,13 @@ import DBus.Client (Client)
 
 import Control.Concurrent.STM
 
+import Debug.Trace
+
 -- Types
 
-data Event = InterfaceAdded | InterfaceRemoved | PropertyChanged
+data Event = ObjectAdded DBus.ObjectPath Object
+           | ObjectRemoved DBus.ObjectPath
+           | ObjectChanged DBus.ObjectPath Object
            deriving (Show)
 
 data Connection = Con {
@@ -91,10 +95,37 @@ getInitialObjects client =
     Right m -> ExceptT $ return $ runExcept $ parseObjectMap $ fromVariant' m
 
 signalHandler :: Client -> TMVar ObjectMap -> TQueue Event -> DBus.Signal -> IO ()
-signalHandler client var event sig
-  | DBus.signalMember sig == "InterfaceAdded" = return ()
-  | DBus.signalMember sig == "InterfaceRemoved" = return ()
+signalHandler _ var events sig
+  | member == "InterfacesAdded" = handleAdded var events path props
+  | member == "InterfacesRemoved" = return ()
   | otherwise = return ()
+
+  where member = DBus.signalMember sig
+        args = DBus.signalBody sig
+        path = fromVariant' $ args !! 0
+        props = fromVariant' $ args !! 1
+
+handleAdded :: TMVar ObjectMap -> TQueue Event -> DBus.ObjectPath -> InterfaceMap -> IO ()
+handleAdded objMapVar events path ifaces = atomically $ do
+  objMap <- takeTMVar objMapVar
+
+  putTMVar objMapVar =<< case M.lookup path objMap of
+
+    -- Object not yet present, must be new
+    Nothing -> case runExcept $ parseObject path ifaces of
+      Left _ -> return objMap -- TODO Handle error (maybe log it)
+      Right newObj -> do
+        writeTQueue events $ ObjectAdded path newObj
+        return $ M.insert path newObj objMap
+
+    -- Object present, modify it
+    Just oldObj -> case runExcept $ addInterfaces oldObj ifaces of
+      Left e -> traceShow e $ return objMap -- TODO Handle error (maybe log it)
+      Right newObj -> do
+        writeTQueue events $ ObjectChanged path newObj
+        return $ M.insert path newObj objMap
+
+  return ()
 
 data ObjectManager = ObjectManager
 

@@ -20,9 +20,11 @@ import Data.Proxy
 import Data.List (isPrefixOf)
 
 import Control.Monad.Trans.Except
+import Control.Monad.State
 
 import qualified DBus
 import Control.Lens.TH
+import Control.Lens (assign)
 
 -- Used for the IdType property of the Block interface
 data IdType = IdFilesystem | IdCrypto | IdRaid | IdOther Text
@@ -202,6 +204,22 @@ fillBlockDevice ifaces = do
           Just i' -> return i'
           where iname = ifaceName (Proxy :: Proxy i)
 
+addToBlockDevice :: BlockDevice -> InterfaceMap -> FillM BlockDevice
+addToBlockDevice dev ifaces = flip execStateT dev $ do
+  blockDevBlock <~? interface'
+  blockDevFS <~? fmap Just interface'
+  blockDevPartitition <~? fmap Just interface'
+  blockDevLoop <~? fmap Just interface'
+
+  return ()
+
+  where interface' :: (Show i, FillIface i) => StateT BlockDevice FillM (Maybe i)
+        interface' = lift $ interface ifaces
+
+        a <~? b = b >>= \case
+          Just x  -> assign a x
+          Nothing -> return ()
+
 parseObject :: DBus.ObjectPath -> InterfaceMap -> FillM Object
 parseObject path ifaces
   | prefix "block_devices" = BlockDevObject <$> fillBlockDevice ifaces
@@ -212,6 +230,11 @@ parseObject path ifaces
 
   where path' = DBus.formatObjectPath path
         prefix pre = ("/org/freedesktop/UDisks2/" ++ pre ++ "/") `isPrefixOf` path'
+
+addInterfaces :: Object -> InterfaceMap -> FillM Object
+addInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
+  addToBlockDevice dev ifaces
+addInterfaces obj  _ = return obj
 
 parseObjectMap :: ObjectIfaceMap -> FillM ObjectMap
 parseObjectMap = M.traverseWithKey parseObject

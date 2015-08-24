@@ -7,5 +7,6 @@ import Control.Monad
 main :: IO ()
 main = void $ withConnection $ \(con, objMap) -> do
   print objMap
-  forever $
+  forever $ do
     nextEvent con >>= print
+    putStrLn ""

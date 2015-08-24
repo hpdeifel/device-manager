@@ -56,7 +56,8 @@ Executable udisks2test
                        containers ==0.5.*,
                        transformers ==0.4.*,
                        lens ==4.12.*,
-                       stm ==2.4.*
+                       stm ==2.4.*,
+                       mtl ==2.2.*
   Main-Is:             UDisks2Main.hs
   Other-Modules:       DBus.UDisks.Types,
                        DBus.DBusAbstraction,

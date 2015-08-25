@@ -91,8 +91,8 @@ nextEvent con = loop
           U.ObjectRemoved objId -> do
             void $ modifyTMVar (conObjMap con) $ M.delete objId
             devs <- takeTMVar (conDevices con)
+            putTMVar (conDevices con) $ M.delete objId devs
             for (M.lookup objId devs)  $ \obj -> do
-              putTMVar (conDevices con) $ M.delete objId devs
               return $ DeviceRemoved obj
 
           U.ObjectChanged objId obj -> do

@@ -193,6 +193,8 @@ data Object = BlockDevObject BlockDevice
             | OtherObject ObjectId
             deriving (Show)
 
+makePrisms ''Object
+
 parseIdType :: Text -> IdType
 parseIdType t = case t of
   "filesystem" -> IdFilesystem

@@ -20,11 +20,12 @@ import qualified Data.Vector as V
 import Data.Text (Text)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe
 import Data.Function
 import Data.Traversable
 import Control.Concurrent.STM
 import Control.Exception
-
+import Control.Monad
 import Control.Lens
 
 -- Represents only removeable devices
@@ -33,7 +34,7 @@ data Device = Device {
   devMountPoints :: Vector Text,
   devFile :: Text,
   devName :: Text
-}
+} deriving (Show)
 
 instance Eq Device where (==) = (==) `on` devId
 instance Ord Device where compare = compare `on` devId
@@ -41,22 +42,27 @@ instance Ord Device where compare = compare `on` devId
 data Event = DeviceAdded Device
            | DeviceChanged Device Device -- ^ Old, New
            | DeviceRemoved Device
+           deriving Show
 
 data Connection = Connection {
   conUDisks :: U.Connection,
-  conDevices :: TMVar (Map U.ObjectId Device)
+  conDevices :: TMVar (Map U.ObjectId Device),
+  conObjMap :: TMVar U.ObjectMap
 }
 
 connect :: IO (Either Text (Connection, [Device]))
 connect = U.connect >>= \case
   Left e -> return $ Left e
   Right (udisks, objMap) -> do
-    let objects = M.mapMaybeWithKey convertDevice objMap
+    let objects = M.mapMaybeWithKey (convertDevice objMap) objMap
+
     var <- newTMVarIO objects
+    objMapVar <- newTMVarIO objMap
 
     let con = Connection
           { conUDisks = udisks
           , conDevices = var
+          , conObjMap = objMapVar
           }
 
     return $ Right (con, M.elems objects)
@@ -75,21 +81,24 @@ nextEvent :: Connection -> IO Event
 nextEvent con = loop
   where innerLoop = U.nextEvent (conUDisks con) >>= \case
           U.ObjectAdded objId obj -> do
+            objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
             devs <- takeTMVar (conDevices con)
-            let newDev = convertDevice objId obj
+            let newDev = convertDevice objMap objId obj
             putTMVar (conDevices con) $
               M.alter (const newDev) objId devs
             return $ DeviceAdded <$> newDev
 
           U.ObjectRemoved objId -> do
+            void $ modifyTMVar (conObjMap con) $ M.delete objId
             devs <- takeTMVar (conDevices con)
             for (M.lookup objId devs)  $ \obj -> do
               putTMVar (conDevices con) $ M.delete objId devs
               return $ DeviceRemoved obj
 
           U.ObjectChanged objId obj -> do
+            objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
             devs <- takeTMVar (conDevices con)
-            let newDev = convertDevice objId obj
+            let newDev = convertDevice objMap objId obj
             case M.lookup objId devs of
               Nothing -> do
                 putTMVar (conDevices con) $
@@ -106,22 +115,38 @@ nextEvent con = loop
           Nothing -> loop
           Just res -> return res
 
-convertDevice :: U.ObjectId -> U.Object -> Maybe Device
-convertDevice objId (U.BlockDevObject obj)
-  | boring obj  = Nothing
-  | otherwise   = Just $ Device
-                  { devId = objId
-                  , devMountPoints = maybe V.empty id $
-                      obj ^. U.blockDevFS ^? _Just . U.fsMountPoints
-                  , devFile = obj ^. U.blockDevBlock . U.blockPreferredDevice
-                  , devName = obj ^. U.blockDevBlock . U.blockHintName
-                  }
-convertDevice _ _ = Nothing
+convertDevice :: U.ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
+convertDevice objMap objId (U.BlockDevObject obj)
+  | boring objMap obj  = Nothing
+  | otherwise          = Just $ Device
+     { devId = objId
+     , devMountPoints = maybe V.empty id $
+          obj ^. U.blockDevFS ^? _Just . U.fsMountPoints
+     , devFile = obj ^. U.blockDevBlock . U.blockPreferredDevice
+     , devName = obj ^. U.blockDevBlock . U.blockIdLabel
+     }
+convertDevice _ _ _ = Nothing
 
-boring :: U.BlockDevice -> Bool
-boring dev = and
+boring :: U.ObjectMap -> U.BlockDevice -> Bool
+boring objMap dev = or
   [ dev ^. U.blockDevFS & isn't _Just
   , dev ^. U.blockDevBlock . U.blockHintSystem
   , dev ^. U.blockDevBlock . U.blockHintIgnore
-  -- TODO "Removable" property of Drive
+  , not removable
   ]
+
+  where removable = case dev ^. U.blockDevBlock . U.blockDrive of
+          Just drive -> objMap ^. at drive
+                               ^? _Just
+                               . U._DriveObject
+                               . U.driveDrive
+                               . U.driveIRemovable
+                               ^. to (fromMaybe False)
+          Nothing -> False
+
+-- | Returns the new value
+modifyTMVar :: TMVar a -> (a -> a) -> STM a
+modifyTMVar var f = do
+  new <- f <$> takeTMVar var
+  putTMVar var new
+  return new

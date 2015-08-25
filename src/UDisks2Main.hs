@@ -1,13 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
-import DBus.UDisks2
+import DBus.UDisks2.Simple
 import Control.Monad
-import Control.Concurrent.STM (atomically)
 
 main :: IO ()
-main = either print (const $ return ()) =<< withConnection (\(con, objMap) -> do
-  print objMap
+main = either print (const $ return ()) =<< withConnection (\(con, objects) -> do
+  print objects
   forever $ do
-    atomically (nextEvent con) >>= print
+    nextEvent con >>= print
     putStrLn "")

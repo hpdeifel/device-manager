@@ -4,6 +4,7 @@
 -- | This module provides a much simpler interface to the udisks daemon.
 module DBus.UDisks2.Simple
        ( Device(Device,devMountPoints,devFile,devName)
+       , devMounted
        , Event(..)
        , Connection
        , connect
@@ -38,6 +39,9 @@ data Device = Device {
 
 instance Eq Device where (==) = (==) `on` devId
 instance Ord Device where compare = compare `on` devId
+
+devMounted :: Device -> Bool
+devMounted = V.null . devMountPoints
 
 data Event = DeviceAdded Device
            | DeviceChanged Device Device -- ^ Old, New

@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 
 
 -- | This module provides a much simpler interface to the udisks daemon.
@@ -11,10 +11,13 @@ module DBus.UDisks2.Simple
        , disconnect
        , withConnection
        , nextEvent
+
+       , mount
        ) where
 
 import qualified DBus.UDisks2 as U
 import qualified DBus.UDisks2.Types as U
+import qualified DBus.UDisks2.Operations as U
 
 import Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -24,15 +27,18 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.Function
 import Data.Traversable
+import Data.Monoid
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Lens
 
+type MountPoint = Text
+
 -- Represents only removeable devices
 data Device = Device {
   devId :: U.ObjectId,
-  devMountPoints :: Vector Text,
+  devMountPoints :: Vector MountPoint,
   devFile :: Text,
   devName :: Text
 } deriving (Show)
@@ -118,6 +124,15 @@ nextEvent con = loop
         loop = atomically innerLoop >>= \case
           Nothing -> loop
           Just res -> return res
+
+-- Operations
+mount :: Connection -> Device -> IO (Either Text MountPoint)
+mount con dev = do
+  objMap <- atomically $ readTMVar (conObjMap con)
+  case (objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join) of
+    Just fileSystem -> U.runOperation (conUDisks con) $
+                       U.fsMount fileSystem M.empty
+    Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support mounting"
 
 convertDevice :: U.ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
 convertDevice objMap objId (U.BlockDevObject obj)

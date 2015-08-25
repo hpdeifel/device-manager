@@ -162,18 +162,18 @@ data AtaIface = AtaIface {
   _ataSmartNumAttributesFailedInThePast :: Int32,
   _ataSmartNumBadSectors :: Int64,
   _ataSmartSelftestStatus :: Text,
-  _ataSmartSelftestPercentRemaining :: Int,
+  _ataSmartSelftestPercentRemaining :: Int32,
   _ataPmSupported :: Bool,
   _ataPmEnabled :: Bool,
   _ataApmSupported :: Bool,
   _ataApmEnabled :: Bool,
   _ataAamSupported :: Bool,
   _ataAamEnabled :: Bool,
-  _ataAamVendorRecommendedValue :: Int,
+  _ataAamVendorRecommendedValue :: Int32,
   _ataWriteCacheSupported :: Bool,
   _ataWriteCacheEnabled :: Bool,
-  _ataSecurityEraseUnitMinutes :: Int,
-  _ataSecurityEnhancedEraseUnitMinutes :: Int,
+  _ataSecurityEraseUnitMinutes :: Int32,
+  _ataSecurityEnhancedEraseUnitMinutes :: Int32,
   _ataSecurityFrozen :: Bool
 } deriving (Show)
 
@@ -187,7 +187,7 @@ data Drive = Drive {
 makeLenses ''Drive
 
 data Object = BlockDevObject BlockDevice
-            | DriveObject
+            | DriveObject Drive
             | MDRaidObject
             | JobObject
             | OtherObject ObjectId
@@ -379,9 +379,6 @@ removeFromBlockDevice dev ifaces
                          then assign i Nothing
                          else return ()
 
--- FIXME This is bullshit. PropertiesChanged doesn't send all properties, but only
---       those that changed. So we need functions to change only _some_ properties in
---       interfaces.
 changeBlockDevice :: BlockDevice -> String -> PropertyMap -> FillM BlockDevice
 changeBlockDevice dev iface props = flip execStateT dev $ do
   changeInterface blockDevBlock
@@ -405,10 +402,203 @@ changeBlockDevice dev iface props = flip execStateT dev $ do
               Nothing -> return ()
           | otherwise = return ()
 
+changeDriveIface :: DriveIface -> PropertyMap -> FillM DriveIface
+changeDriveIface iface props = flip execStateT iface $ do
+  driveIVendor <~? property' "Vendor"
+  driveIModel <~? property' "Model"
+  driveIRevision <~? property' "Revision"
+  driveISerial <~? property' "Serial"
+  driveIWwn <~? property' "WWN"
+  driveIId <~? property' "Id"
+  driveIConfiguration <~? property' "Configuration"
+  driveIMedia <~? property' "Media"
+  driveIMediaCompatibility <~? property' "MediaCompatibility"
+  driveIMediaRemovable <~? property' "MediaRemovable"
+  driveIMediaAvailable <~? property' "MediaAvailable"
+  driveIMediaChangeDetected <~? property' "MediaChangeDetected"
+  driveISize <~? property' "Size"
+  driveITimeDetected <~? property' "TimeDetected"
+  driveITimeMediaDetected <~? property' "TimeMediaDetected"
+  driveIOptical <~? property' "Optical"
+  driveIOpticalBlank <~? property' "OpticalBlank"
+  driveIOpticalNumTracks <~? property' "OpticalNumTracks"
+  driveIOpticalNumAudioTracks <~? property' "OpticalNumAudioTracks"
+  driveIOpticalNumDataTracks  <~? property' "OpticalNumDataTracks"
+  driveIOpticalNumSessions <~? property' "OpticalNumSessions"
+  driveIRotationRate <~? property' "RotationRate"
+  driveIConnectionBus <~? property' "ConnectionBus"
+  driveISeat <~? property' "Seat"
+  driveIRemovable <~? property' "Removable"
+  driveIEjectable <~? property' "Ejectable"
+  driveISortKey <~? property' "SortKey"
+  driveICanPowerOff <~? property' "CanPowerOff"
+  driveISiblingId <~? property' "SiblingId"
+
+  where property' :: DBus.IsVariant a => String -> StateT DriveIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
+
+fillDriveIface :: PropertyMap -> FillM DriveIface
+fillDriveIface props = do
+  _driveIVendor <- property' "Vendor"
+  _driveIModel <- property' "Model"
+  _driveIRevision <- property' "Revision"
+  _driveISerial <- property' "Serial"
+  _driveIWwn <- property' "WWN"
+  _driveIId <- property' "Id"
+  _driveIConfiguration <- property' "Configuration"
+  _driveIMedia <- property' "Media"
+  _driveIMediaCompatibility <- property' "MediaCompatibility"
+  _driveIMediaRemovable <- property' "MediaRemovable"
+  _driveIMediaAvailable <- property' "MediaAvailable"
+  _driveIMediaChangeDetected <- property' "MediaChangeDetected"
+  _driveISize <- property' "Size"
+  _driveITimeDetected <- property' "TimeDetected"
+  _driveITimeMediaDetected <- property' "TimeMediaDetected"
+  _driveIOptical <- property' "Optical"
+  _driveIOpticalBlank <- property' "OpticalBlank"
+  _driveIOpticalNumTracks <- property' "OpticalNumTracks"
+  _driveIOpticalNumAudioTracks <- property' "OpticalNumAudioTracks"
+  _driveIOpticalNumDataTracks  <- property' "OpticalNumDataTracks"
+  _driveIOpticalNumSessions <- property' "OpticalNumSessions"
+  _driveIRotationRate <- property' "RotationRate"
+  _driveIConnectionBus <- property' "ConnectionBus"
+  _driveISeat <- property' "Seat"
+  _driveIRemovable <- property' "Removable"
+  _driveIEjectable <- property' "Ejectable"
+  _driveISortKey <- property' "SortKey"
+  _driveICanPowerOff <- property' "CanPowerOff"
+  _driveISiblingId <- property' "SiblingId"
+
+  return DriveIface{..}
+
+  where property' :: DBus.IsVariant a => String -> Except Text a
+        property' = property props
+
+changeAtaIface :: AtaIface -> PropertyMap -> FillM AtaIface
+changeAtaIface iface props = flip execStateT iface $ do
+  ataSmartSupported <~? property' "SmartSupported"
+  ataSmartEnabled <~? property' "SmartEnabled"
+  ataSmartUpdated <~? property' "SmartUpdated"
+  ataSmartFailing <~? property' "SmartFailing"
+  ataSmartPowerOnSeconds <~? property' "SmartPowerOnSeconds"
+  ataSmartTemperature <~? property' "SmartTemperature"
+  ataSmartNumAttributesFailing <~? property' "SmartNumAttributesFailing"
+  ataSmartNumAttributesFailedInThePast <~? property' "SmartNumAttributesFailedInThePast"
+  ataSmartNumBadSectors <~? property' "SmartNumBadSectors"
+  ataSmartSelftestStatus <~? property' "SmartSelftestStatus"
+  ataSmartSelftestPercentRemaining <~? property' "SmartSelftestPercentRemaining"
+  ataPmSupported <~? property' "PmSupported"
+  ataPmEnabled <~? property' "PmEnabled"
+  ataApmSupported <~? property' "ApmSupported"
+  ataApmEnabled <~? property' "ApmEnabled"
+  ataAamSupported <~? property' "AamSupported"
+  ataAamEnabled <~? property' "AamEnabled"
+  ataAamVendorRecommendedValue <~? property' "AamVendorRecommendedValue"
+  ataWriteCacheSupported <~? property' "WriteCacheSupported"
+  ataWriteCacheEnabled <~? property' "WriteCacheEnabled"
+  ataSecurityEraseUnitMinutes <~? property' "SecurityEraseUnitMinutes"
+  ataSecurityEnhancedEraseUnitMinutes <~? property' "SecurityEnhancedEraseUnitMinutes"
+  ataSecurityFrozen <~? property' "SecurityFrozen"
+
+  where property' :: DBus.IsVariant a => String -> StateT AtaIface FillM (Maybe a)
+        property' prop = lift $ maybeProperty props prop
+
+fillAtaIface :: PropertyMap -> FillM AtaIface
+fillAtaIface props = do
+  _ataSmartSupported <- property' "SmartSupported"
+  _ataSmartEnabled <- property' "SmartEnabled"
+  _ataSmartUpdated <- property' "SmartUpdated"
+  _ataSmartFailing <- property' "SmartFailing"
+  _ataSmartPowerOnSeconds <- property' "SmartPowerOnSeconds"
+  _ataSmartTemperature <- property' "SmartTemperature"
+  _ataSmartNumAttributesFailing <- property' "SmartNumAttributesFailing"
+  _ataSmartNumAttributesFailedInThePast <- property' "SmartNumAttributesFailedInThePast"
+  _ataSmartNumBadSectors <- property' "SmartNumBadSectors"
+  _ataSmartSelftestStatus <- property' "SmartSelftestStatus"
+  _ataSmartSelftestPercentRemaining <- property' "SmartSelftestPercentRemaining"
+  _ataPmSupported <- property' "PmSupported"
+  _ataPmEnabled <- property' "PmEnabled"
+  _ataApmSupported <- property' "ApmSupported"
+  _ataApmEnabled <- property' "ApmEnabled"
+  _ataAamSupported <- property' "AamSupported"
+  _ataAamEnabled <- property' "AamEnabled"
+  _ataAamVendorRecommendedValue <- property' "AamVendorRecommendedValue"
+  _ataWriteCacheSupported <- property' "WriteCacheSupported"
+  _ataWriteCacheEnabled <- property' "WriteCacheEnabled"
+  _ataSecurityEraseUnitMinutes <- property' "SecurityEraseUnitMinutes"
+  _ataSecurityEnhancedEraseUnitMinutes <- property' "SecurityEnhancedEraseUnitMinutes"
+  _ataSecurityFrozen <- property' "SecurityFrozen"
+
+  return AtaIface{..}
+
+  where property' :: DBus.IsVariant a => String -> Except Text a
+        property' = property props
+
+fillDrive :: InterfaceMap -> FillM Drive
+fillDrive ifaces = do
+  _driveDrive <- required
+  _driveAta <- interface'
+
+  return Drive{..}
+
+  where interface' :: (Show i, FillIface i) => FillM (Maybe i)
+        interface' = interface ifaces
+
+        required :: forall i. (Show i, FillIface i) => FillM i
+        required = interface' >>= \case
+          Nothing -> throwE $ "Interface " <> T.pack iname <> " is required but doesn't exist"
+          Just i' -> return i'
+          where iname = ifaceName (Proxy :: Proxy i)
+
+addToDrive :: Drive -> InterfaceMap -> FillM Drive
+addToDrive drive ifaces = flip execStateT drive $ do
+  driveDrive <~? interface'
+  driveAta   <~? Just <$> interface'
+
+  where interface' :: (Show i, FillIface i) => StateT Drive FillM (Maybe i)
+        interface' = lift $ interface ifaces
+
+removeFromDrive :: Drive -> Vector String -> Maybe Drive
+removeFromDrive drive ifaces
+  | driveIface `V.elem` ifaces = Nothing
+  | otherwise                  = Just $ flip execState drive $ do
+      maybeDelete driveAta
+
+  where driveIface = ifaceName (Proxy :: Proxy DriveIface)
+
+        maybeDelete :: forall i. FillIface i => Lens' Drive (Maybe i)
+                    -> State Drive ()
+        maybeDelete i = if V.elem (ifaceName (Proxy :: Proxy i)) ifaces
+                         then assign i Nothing
+                         else return ()
+
+changeDrive :: Drive -> String -> PropertyMap -> FillM Drive
+changeDrive drive iface props = flip execStateT drive $ do
+  changeInterface driveDrive
+  changeInterfaceM driveAta
+
+  where changeInterface :: forall i. FillIface i => Lens' Drive i
+                        -> StateT Drive FillM ()
+        changeInterface i
+          | ifaceName (Proxy :: Proxy i) == iface = do
+              use i >>= lift . flip changeIface props >>= assign i
+          | otherwise = return ()
+
+        changeInterfaceM :: forall i. FillIface i => Lens' Drive (Maybe i)
+                         -> StateT Drive FillM ()
+        changeInterfaceM i
+          | ifaceName (Proxy :: Proxy i) == iface = use i >>= \case
+              Just i' -> lift (Just <$> changeIface i' props) >>= assign i
+              -- Interface wasn't present. If we try to change it, we cannot try
+              -- to change it, since we only know the changed properties and not
+              -- the rest.
+              Nothing -> return ()
+          | otherwise = return ()
+
 parseObject :: ObjectId -> InterfaceMap -> FillM Object
 parseObject (ObjectId path) ifaces
   | prefix "block_devices" = BlockDevObject <$> fillBlockDevice ifaces
-  | prefix "drives"        = return DriveObject
+  | prefix "drives"        = DriveObject <$> fillDrive ifaces
   | prefix "mdraid"        = return MDRaidObject
   | prefix "jobs"          = return JobObject
   | otherwise              = return $ OtherObject $ ObjectId path
@@ -419,17 +609,23 @@ parseObject (ObjectId path) ifaces
 addInterfaces :: Object -> InterfaceMap -> FillM Object
 addInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
   addToBlockDevice dev ifaces
+addInterfaces (DriveObject drive) ifaces = DriveObject <$>
+  addToDrive drive ifaces
 addInterfaces obj  _ = return obj
 
 -- Returns Nothing if the last or a required interface was removed from an object
 removeInterfaces :: Object -> Vector String -> Maybe Object
 removeInterfaces (BlockDevObject dev) ifaces = BlockDevObject <$>
   removeFromBlockDevice dev ifaces
+removeInterfaces (DriveObject drive) ifaces = DriveObject <$>
+  removeFromDrive drive ifaces
 removeInterfaces _ _ = Nothing -- TODO
 
 changeProperties :: Object -> String -> PropertyMap -> FillM Object
 changeProperties (BlockDevObject dev) iface props = BlockDevObject <$>
   changeBlockDevice dev iface props
+changeProperties (DriveObject drive) iface props = DriveObject <$>
+  changeDrive drive iface props
 changeProperties obj _ _ = return obj
 
 parseObjectMap :: ObjectIfaceMap -> FillM ObjectMap
@@ -490,6 +686,16 @@ instance FillIface LoopIface where
   fillIface = fillLoopIface
   changeIface = changeLoopIface
   ifaceName _ =  "org.freedesktop.UDisks2.Loop"
+
+instance FillIface DriveIface where
+  fillIface = fillDriveIface
+  changeIface = changeDriveIface
+  ifaceName _ = "org.freedesktop.UDisks2.Drive"
+
+instance FillIface AtaIface where
+  fillIface = fillAtaIface
+  changeIface = changeAtaIface
+  ifaceName _ = "org.freedesktop.UDisks2.Drive.Ata"
 
 interface :: forall i. FillIface i => InterfaceMap -> FillM (Maybe i)
 interface ifaces = maybe (return Nothing) (fmap Just . fillIface) $ M.lookup key ifaces

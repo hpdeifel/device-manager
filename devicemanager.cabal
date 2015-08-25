@@ -63,4 +63,5 @@ Executable udisks2test
                        DBus.DBusAbstraction,
                        DBus.UDisks2,
                        DBus.UDisks2.Simple,
-                       DBus.UDisks2.Operations
+                       DBus.UDisks2.Operations,
+                       DBus.UDisks2.Internal

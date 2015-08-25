@@ -1,8 +1,37 @@
-module DBus.UDisks2.Operations where
+{-# LANGUAGE FlexibleInstances, UndecidableInstances, TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, MultiParamTypeClasses #-}
+{-# LANGUAGE LambdaCase, FlexibleContexts #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+module DBus.UDisks2.Operations
+       ( Operation
+       , runOperation
+       , fsMount
+       , fsUnmount
+       ) where
 
 import DBus.UDisks2.Types
+import DBus.UDisks2.Internal
+
+import Data.Map (Map)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Lens
+import Data.Proxy
+
+import qualified DBus
+import qualified DBus.DBusAbstraction as DBus
+import DBus.DBusAbstraction (DBusInterface(..),DBusObject(..), Implements)
 
 -- Contains available operations (dbus methods) for every supported interface.
+
+type Operation = ExceptT Text (ReaderT Connection IO)
+
+runOperation :: Connection -> Operation a -> IO (Either Text a)
+runOperation con = flip runReaderT con . runExceptT
 
 ----------------------------------------------------------------------
 -- Block -------------------------------------------------------------
@@ -37,13 +66,26 @@ import DBus.UDisks2.Types
 -- FileSystem --------------------------------------------------------
 ----------------------------------------------------------------------
 
+instance DBusObject FileSystemIface where
+  type DefaultInterface FileSystemIface = FileSystemIface
+  getObjectPath = view (fsObj.asPath)
+  getDestination _ = udisksDestination
+
+instance Implements FileSystemIface FileSystemIface
+
 -- The following methods are not implemented, but should be
 
 -- SetLabel (IN  s     label,
 --           IN  a{sv} options);
--- Mount    (IN  a{sv} options,
---           OUT s     mount_path);
+
+type MountOptions = Map Text DBus.Variant
+
+fsMount :: FileSystemIface -> MountOptions -> Operation Text
+fsMount iface opts = invoke iface "Mount" [DBus.toVariant opts]
+
 -- Unmount  (IN  a{sv} options);
+fsUnmount :: FileSystemIface -> MountOptions -> Operation ()
+fsUnmount iface opts = invoke iface "Mount" [DBus.toVariant opts]
 
 
 ----------------------------------------------------------------------
@@ -102,3 +144,30 @@ import DBus.UDisks2.Types
 -- PmStandby          (IN  a{sv}            options);
 -- PmWakeup           (IN  a{sv}            options);
 -- SecurityEraseUnit  (IN  a{sv}            options);
+
+
+-- Helpers
+asPath :: Iso' ObjectId DBus.ObjectPath
+asPath = iso getPath ObjectId
+  where getPath (ObjectId path) = path
+
+instance FillIface i => DBusInterface i where
+  getInterface _ = DBus.interfaceName_ $ ifaceName (Proxy :: Proxy i)
+
+udisksDestination :: DBus.BusName
+udisksDestination = "org.freedesktop.UDisks2"
+
+invoke :: (DBus.SaneDBusObject o, DBus.IsVariant a)
+       => o -> DBus.MemberName -> [DBus.Variant] -> Operation a
+invoke obj member args = do
+  client <- asks conClient
+  liftIO (DBus.invoke client obj member args) >>= \case
+    Left err -> throwError $ T.pack $ show err
+    Right res -> return $ DBus.fromVariant' res
+
+-- NOTE: This is a hack to allow methods without return values to work. It
+-- crucially depends on the fact that the argument for fromVariant is not
+-- evaluated.
+instance DBus.IsVariant () where
+  toVariant = undefined -- Ugly as hell
+  fromVariant _ = Just ()

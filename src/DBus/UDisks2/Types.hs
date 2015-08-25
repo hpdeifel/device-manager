@@ -27,7 +27,7 @@ import Control.Monad.State
 
 import qualified DBus
 import Control.Lens.TH
-import Control.Lens (assign, Lens', ASetter, use)
+import Control.Lens (assign, Lens', ASetter, use, (^.))
 
 -- TODO This module contains a lot of duplication.
 --
@@ -51,6 +51,7 @@ newtype Configuration = Configuration (Vector (Text, (Map Text DBus.Variant)))
                       deriving (Show)
 
 data BlockIface = BlockIface {
+  _blockObj :: ObjectId,
   _blockDevice :: Text,
   _blockPreferredDevice :: Text,
   _blockSymlinks :: Vector Text,
@@ -80,12 +81,14 @@ data BlockIface = BlockIface {
 makeLenses ''BlockIface
 
 data FileSystemIface = FileSystemIface {
+  _fsObj :: ObjectId,
   _fsMountPoints :: Vector Text
 } deriving (Show)
 
 makeLenses ''FileSystemIface
 
 data PartititionIface = PartititionIface {
+  _partititionObj :: ObjectId,
   _partititionNumber :: Word32,
   _partititionPartititionType :: Text,
   _partititionFlags :: Word64,
@@ -101,6 +104,7 @@ data PartititionIface = PartititionIface {
 makeLenses ''PartititionIface
 
 data LoopIface = LoopIface {
+  _loopObj :: ObjectId,
   _loopBackingFile :: Text,
   _loopAutoclear :: Bool,
   _loopSetupByUID :: Word32
@@ -109,6 +113,7 @@ data LoopIface = LoopIface {
 makeLenses ''LoopIface
 
 data BlockDevice = BlockDevice {
+  _blockDevObj :: ObjectId,
   _blockDevBlock :: BlockIface,
   _blockDevFS :: Maybe FileSystemIface,
   _blockDevPartitition :: Maybe PartititionIface,
@@ -118,6 +123,7 @@ data BlockDevice = BlockDevice {
 makeLenses ''BlockDevice
 
 data DriveIface = DriveIface {
+  _driveIObj :: ObjectId,
   _driveIVendor :: Text,
   _driveIModel :: Text,
   _driveIRevision :: Text,
@@ -152,6 +158,7 @@ data DriveIface = DriveIface {
 makeLenses ''DriveIface
 
 data AtaIface = AtaIface {
+  _ataObj :: ObjectId,
   _ataSmartSupported :: Bool,
   _ataSmartEnabled :: Bool,
   _ataSmartUpdated :: Word64,
@@ -180,6 +187,7 @@ data AtaIface = AtaIface {
 makeLenses ''AtaIface
 
 data Drive = Drive {
+  _driveObj :: ObjectId,
   _driveDrive :: DriveIface,
   _driveAta :: Maybe AtaIface
 } deriving (Show)
@@ -235,8 +243,8 @@ changeBlockIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT BlockIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillBlockIface :: PropertyMap -> FillM BlockIface
-fillBlockIface props = do
+fillBlockIface :: ObjectId -> PropertyMap -> FillM BlockIface
+fillBlockIface _blockObj props = do
   -- NOTE We assume here, that the filesystem paths are encoded in utf8
   -- This may of course be violated on some systems, but those may not
   -- be worthwhile to support for a udisks helper program
@@ -276,8 +284,8 @@ changeFSIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT FileSystemIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillFSIface :: PropertyMap -> FillM FileSystemIface
-fillFSIface props = do
+fillFSIface :: ObjectId -> PropertyMap -> FillM FileSystemIface
+fillFSIface _fsObj props = do
   _fsMountPoints <- V.map decodeUtf8 <$> property' "MountPoints"
   return FileSystemIface{..}
 
@@ -300,8 +308,8 @@ changePartititionIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT PartititionIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillPartititionIface :: PropertyMap -> FillM PartititionIface
-fillPartititionIface props = do
+fillPartititionIface :: ObjectId -> PropertyMap -> FillM PartititionIface
+fillPartititionIface _partititionObj props = do
   _partititionNumber <- property' "Number"
   _partititionPartititionType <- property' "PartititionType"
   _partititionFlags <- property' "Flags"
@@ -326,8 +334,8 @@ changeLoopIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT LoopIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillLoopIface :: PropertyMap -> FillM LoopIface
-fillLoopIface props = do
+fillLoopIface :: ObjectId -> PropertyMap -> FillM LoopIface
+fillLoopIface _loopObj props = do
   _loopBackingFile <- decodeUtf8 <$> property' "BackingFile"
   _loopAutoclear <- property' "Autoclear"
   _loopSetupByUID <- property' "SetupByUID"
@@ -336,8 +344,8 @@ fillLoopIface props = do
   where property' :: DBus.IsVariant a => String -> Except Text a
         property' = property props
 
-fillBlockDevice :: InterfaceMap -> FillM BlockDevice
-fillBlockDevice ifaces = do
+fillBlockDevice :: ObjectId -> InterfaceMap -> FillM BlockDevice
+fillBlockDevice _blockDevObj ifaces = do
   _blockDevBlock <- required
   _blockDevFS <- interface'
   _blockDevPartitition <- interface'
@@ -345,7 +353,7 @@ fillBlockDevice ifaces = do
   return $ BlockDevice{..}
 
   where interface' :: (Show i, FillIface i) => FillM (Maybe i)
-        interface' = interface ifaces
+        interface' = interface _blockDevObj ifaces
 
         required :: forall i. (Show i, FillIface i) => FillM i
         required = interface' >>= \case
@@ -361,7 +369,7 @@ addToBlockDevice dev ifaces = flip execStateT dev $ do
   blockDevLoop <~? fmap Just interface'
 
   where interface' :: (Show i, FillIface i) => StateT BlockDevice FillM (Maybe i)
-        interface' = lift $ interface ifaces
+        interface' = lift $ interface (dev^.blockDevObj) ifaces
 
 removeFromBlockDevice :: BlockDevice -> Vector String -> Maybe BlockDevice
 removeFromBlockDevice dev ifaces
@@ -439,8 +447,8 @@ changeDriveIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT DriveIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillDriveIface :: PropertyMap -> FillM DriveIface
-fillDriveIface props = do
+fillDriveIface :: ObjectId -> PropertyMap -> FillM DriveIface
+fillDriveIface _driveIObj props = do
   _driveIVendor <- property' "Vendor"
   _driveIModel <- property' "Model"
   _driveIRevision <- property' "Revision"
@@ -505,8 +513,8 @@ changeAtaIface iface props = flip execStateT iface $ do
   where property' :: DBus.IsVariant a => String -> StateT AtaIface FillM (Maybe a)
         property' prop = lift $ maybeProperty props prop
 
-fillAtaIface :: PropertyMap -> FillM AtaIface
-fillAtaIface props = do
+fillAtaIface :: ObjectId -> PropertyMap -> FillM AtaIface
+fillAtaIface _ataObj props = do
   _ataSmartSupported <- property' "SmartSupported"
   _ataSmartEnabled <- property' "SmartEnabled"
   _ataSmartUpdated <- property' "SmartUpdated"
@@ -536,15 +544,15 @@ fillAtaIface props = do
   where property' :: DBus.IsVariant a => String -> Except Text a
         property' = property props
 
-fillDrive :: InterfaceMap -> FillM Drive
-fillDrive ifaces = do
+fillDrive :: ObjectId -> InterfaceMap -> FillM Drive
+fillDrive _driveObj ifaces = do
   _driveDrive <- required
   _driveAta <- interface'
 
   return Drive{..}
 
   where interface' :: (Show i, FillIface i) => FillM (Maybe i)
-        interface' = interface ifaces
+        interface' = interface _driveObj ifaces
 
         required :: forall i. (Show i, FillIface i) => FillM i
         required = interface' >>= \case
@@ -558,7 +566,7 @@ addToDrive drive ifaces = flip execStateT drive $ do
   driveAta   <~? Just <$> interface'
 
   where interface' :: (Show i, FillIface i) => StateT Drive FillM (Maybe i)
-        interface' = lift $ interface ifaces
+        interface' = lift $ interface (drive^.driveObj) ifaces
 
 removeFromDrive :: Drive -> Vector String -> Maybe Drive
 removeFromDrive drive ifaces
@@ -598,9 +606,9 @@ changeDrive drive iface props = flip execStateT drive $ do
           | otherwise = return ()
 
 parseObject :: ObjectId -> InterfaceMap -> FillM Object
-parseObject (ObjectId path) ifaces
-  | prefix "block_devices" = BlockDevObject <$> fillBlockDevice ifaces
-  | prefix "drives"        = DriveObject <$> fillDrive ifaces
+parseObject objId@(ObjectId path) ifaces
+  | prefix "block_devices" = BlockDevObject <$> fillBlockDevice objId ifaces
+  | prefix "drives"        = DriveObject <$> fillDrive objId ifaces
   | prefix "mdraid"        = return MDRaidObject
   | prefix "jobs"          = return JobObject
   | otherwise              = return $ OtherObject $ ObjectId path
@@ -665,7 +673,7 @@ maybeProperty m k = traverse maybeVariant $ M.lookup k m
                        <> T.pack k <> ")"
 
 class FillIface i where
-  fillIface :: PropertyMap -> FillM i
+  fillIface :: ObjectId -> PropertyMap -> FillM i
   changeIface :: i -> PropertyMap -> FillM i
   ifaceName :: Proxy i -> String
 
@@ -699,8 +707,8 @@ instance FillIface AtaIface where
   changeIface = changeAtaIface
   ifaceName _ = "org.freedesktop.UDisks2.Drive.Ata"
 
-interface :: forall i. FillIface i => InterfaceMap -> FillM (Maybe i)
-interface ifaces = maybe (return Nothing) (fmap Just . fillIface) $ M.lookup key ifaces
+interface :: forall i. FillIface i => ObjectId -> InterfaceMap -> FillM (Maybe i)
+interface objId ifaces = maybe (return Nothing) (fmap Just . fillIface objId) $ M.lookup key ifaces
   where key = ifaceName (Proxy :: Proxy i)
 
 decodeUtf8 :: ByteString -> Text

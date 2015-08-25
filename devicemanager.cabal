@@ -62,4 +62,5 @@ Executable udisks2test
   Other-Modules:       DBus.UDisks2.Types,
                        DBus.DBusAbstraction,
                        DBus.UDisks2,
-                       DBus.UDisks2.Simple
+                       DBus.UDisks2.Simple,
+                       DBus.UDisks2.Operations

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, LambdaCase #-}
 
 module Main (main) where
 
@@ -10,24 +10,25 @@ import Graphics.Vty.Widgets.Util
 import Graphics.Vty.Widgets.Text
 import Graphics.Vty.Widgets.Box
 import Graphics.Vty.Widgets.Borders
-import Graphics.Vty
+import Graphics.Vty hiding (nextEvent)
 import Control.Monad
-import Control.Applicative ((<$>))
 import Control.Concurrent
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.List
-import Data.Maybe (isJust)
+import qualified Data.Vector as V
+import System.IO
+import System.Exit
 
-import DBus.UDisks2
-import Common
+import DBus.UDisks2.Simple
 import ErrorLogger
 
 main :: IO ()
 main = do
-  let nameColumn = maybe "No name" T.pack . formatDeviceLabel
-      devFileColumn = T.pack . deviceFile
-      mountPointCol = maybe "" (T.pack . intercalate ",") . mountPoints
-      mountedColumn d = if isMounted d then "✔" else " "
+  let nameColumn =  devName
+      devFileColumn = devFile
+      mountPointCol = T.intercalate "," . V.toList . devMountPoints
+      mountedColumn d = if devMounted d then "✔" else " "
 
   lst <- newList defAttr [ ColumnSpec "Mounted" (Fixed 7) mountedColumn
                          , ColumnSpec "Name" Expand nameColumn
@@ -47,69 +48,63 @@ main = do
 
   errLog <- ErrLog <$> newChan
 
-  con  <- udisksConnect errLog
-  devs <- getDeviceList con
+  connect >>= \case
+    Left err -> do
+      T.hPutStrLn stderr err
+      exitWith (ExitFailure 1)
+    Right (con, devs) -> do
+      fg `onKeyPressed` \_ key _ ->
+          if key == KChar 'q' then
+          shutdownUi >> return True
+          else return False
 
-  fg `onKeyPressed` \_ key _ ->
-    if key == KChar 'q' then
-      shutdownUi >> return True
-      else return False
+      lst `onItemActivated` \(ActivateItemEvent _ dev) ->
+        if devMounted dev
+          then void $ unmount con dev
+          else void $ mount con dev -- TODO log errors
 
-  lst `onItemActivated` \(ActivateItemEvent _ dev) -> do
-    if (isJust $ mountPoints dev)
-      then doUnmount con dev
-      else doMount con dev
+      forM_ devs $ \d -> addDevice lst d
 
-  chan <- newChan
+      void $ forkIO $ eventThread lst con
+      void $ forkIO $ logThread errLog statusBar
 
-  forM_ devs $ \d -> do
-    addDevice lst d
-    listenDevice con d chan
-
-  listenEvents con chan
-
-  void $ forkIO $ eventThread lst con chan
-  void $ forkIO $ logThread errLog statusBar
-
-  runUi c defaultContext { focusAttr = black `on` yellow }
+      runUi c defaultContext { focusAttr = black `on` yellow }
 
 type ListWidget = Widget (ColumnList Device)
 
-eventThread :: ListWidget -> (UDisksConnection a) -> Chan UDiskMessage -> IO ()
-eventThread list con chan = forever $ do
-  msg <- readChan chan
-  case msg of
+eventThread :: ListWidget -> Connection -> IO ()
+eventThread list con = forever $ do
+  event <- nextEvent con
+  case event of
     DeviceRemoved path -> remDevice list path
-    DeviceAdded   dev  -> addDevice list dev >> listenDevice con dev chan
-    DeviceChanged dev  -> changeDevice list dev
+    DeviceAdded   dev  -> addDevice list dev
+    DeviceChanged old new  -> changeDevice list old new
 
 addDevice :: ListWidget -> Device -> IO ()
-addDevice lst d = unless (deviceBoring d) $
-  schedule $ addToList lst d
+addDevice lst d = schedule $ addToList lst d
 
-remDevice :: ListWidget -> ObjectPath -> IO ()
+remDevice :: ListWidget -> Device -> IO ()
 remDevice lst path = do
   idx <- getIndex' lst path
   case idx of
     Just idx' -> schedule $ removeFromList lst idx' >> return ()
     Nothing   -> return ()
 
-changeDevice :: ListWidget -> Device -> IO ()
-changeDevice lst dev = do
-  idx <- getIndex lst dev
-  remDevice lst (objectPath dev)
+changeDevice :: ListWidget -> Device -> Device -> IO ()
+changeDevice lst old new = do
+  idx <- getIndex lst old
+  remDevice lst old
   case idx of
-    Just idx' -> unless (deviceBoring dev) $
-      schedule $ insertIntoList lst dev idx'
-    Nothing   -> addDevice lst dev
+    Just idx' -> schedule $ insertIntoList lst new idx'
+    Nothing   -> addDevice lst new
 
 getIndex :: ListWidget -> Device -> IO (Maybe Int)
-getIndex lst dev = getIndex' lst (objectPath dev)
+getIndex lst dev = getIndex' lst dev
 
-getIndex' :: ListWidget -> ObjectPath -> IO (Maybe Int)
-getIndex' lst path = do
+getIndex' :: ListWidget -> Device -> IO (Maybe Int)
+getIndex' lst dev1 = do
   indices <- getIndices lst
-  return $ fst <$> find (\(_, dev) -> objectPath dev == path) indices
+  return $ fst <$> find (\(_, dev2) -> dev2 == dev1) indices
 
 getIndices :: ListWidget -> IO [(Int, Device)]
 getIndices lst = do

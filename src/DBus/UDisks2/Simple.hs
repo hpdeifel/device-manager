@@ -47,7 +47,7 @@ instance Eq Device where (==) = (==) `on` devId
 instance Ord Device where compare = compare `on` devId
 
 devMounted :: Device -> Bool
-devMounted = V.null . devMountPoints
+devMounted = not . V.null . devMountPoints
 
 data Event = DeviceAdded Device
            | DeviceChanged Device Device -- ^ Old, New

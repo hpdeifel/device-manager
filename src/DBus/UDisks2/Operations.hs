@@ -162,7 +162,7 @@ invoke :: (DBus.SaneDBusObject o, DBus.IsVariant a)
 invoke obj member args = do
   client <- asks conClient
   liftIO (DBus.invoke client obj member args) >>= \case
-    Left err -> throwError $ T.pack $ show err
+    Left err -> throwError $ formatMethodError err
     Right res -> return $ DBus.fromVariant' res
 
 -- NOTE: This is a hack to allow methods without return values to work. It
@@ -171,3 +171,9 @@ invoke obj member args = do
 instance DBus.IsVariant () where
   toVariant = undefined -- Ugly as hell
   fromVariant _ = Just ()
+
+
+formatMethodError :: DBus.MethodError -> Text
+formatMethodError err = case DBus.methodErrorBody err of
+  [] -> T.pack $ DBus.formatErrorName $ DBus.methodErrorName err
+  (msg:_) -> DBus.fromVariant' msg

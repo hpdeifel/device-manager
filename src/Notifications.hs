@@ -24,7 +24,6 @@ import System.IO
 
 import DBus.DBusAbstraction
 import DBus.UDisks2.Simple
-import ErrorLogger
 
 data Notify = Notify DBus.Client
 

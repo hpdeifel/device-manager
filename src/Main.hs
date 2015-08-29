@@ -21,7 +21,6 @@ import System.IO
 import System.Exit
 
 import DBus.UDisks2.Simple
-import ErrorLogger
 
 main :: IO ()
 main = do
@@ -60,8 +59,8 @@ main = do
 
       lst `onItemActivated` \(ActivateItemEvent _ dev) ->
         if devMounted dev
-          then void $ unmount con dev
-          else void $ mount con dev -- TODO log errors
+          then unmount con dev >>= logError errLog
+          else mount con dev >>= logError errLog
 
       forM_ devs $ \d -> addDevice lst d
 
@@ -116,8 +115,9 @@ getIndices lst = do
 
 newtype ErrLog = ErrLog (Chan T.Text)
 
-instance ErrorLogger ErrLog where
-  logError (ErrLog chan) t = writeChan chan t
+logError :: ErrLog -> Either T.Text a -> IO ()
+logError (ErrLog chan) (Left err) = writeChan chan err
+logError (ErrLog chan) (Right _) = return ()
 
 logThread :: ErrLog -> Widget FormattedText -> IO ()
 logThread (ErrLog chan) statusBar = forever $ do

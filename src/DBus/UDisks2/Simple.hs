@@ -130,7 +130,7 @@ nextEvent con = loop
 mount :: Connection -> Device -> IO (Either Text MountPoint)
 mount con dev = do
   objMap <- atomically $ readTMVar (conObjMap con)
-  case (objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join) of
+  case objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join of
     Just fileSystem -> U.runOperation (conUDisks con) $
                        U.fsMount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support mounting"
@@ -138,7 +138,7 @@ mount con dev = do
 unmount :: Connection -> Device -> IO (Either Text ())
 unmount con dev = do
   objMap <- atomically $ readTMVar (conObjMap con)
-  case (objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join) of
+  case objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join of
     Just fileSystem -> U.runOperation (conUDisks con) $
                        U.fsUnmount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support unmounting"

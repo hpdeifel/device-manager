@@ -16,6 +16,7 @@ import Control.Concurrent
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.List
+import Data.Monoid
 import qualified Data.Vector as V
 import System.IO
 import System.Exit
@@ -59,8 +60,12 @@ main = do
 
       lst `onItemActivated` \(ActivateItemEvent _ dev) ->
         if devMounted dev
-          then unmount con dev >>= logError errLog
-          else mount con dev >>= logError errLog
+          then unmount con dev
+               >>= logErrorOrSuccess errLog
+                   (devName dev <> " unmounted")
+          else mount con dev
+               >>= logErrorOrSuccess errLog
+                   (devName dev <> " mounted")
 
       forM_ devs $ \d -> addDevice lst d
 
@@ -115,6 +120,12 @@ getIndices lst = do
 newtype ErrLog = ErrLog (Widget FormattedText)
 
 logError :: ErrLog -> Either T.Text a -> IO ()
-logError (ErrLog statusBar) (Left msg) = do
+logError errLog (Left msg) = info errLog msg
+logError _      _          = return ()
+
+logErrorOrSuccess :: ErrLog -> T.Text -> Either T.Text a -> IO ()
+logErrorOrSuccess errLog success = info errLog . either id (const success)
+
+info :: ErrLog -> T.Text -> IO ()
+info (ErrLog statusBar) msg = do
   schedule $ setText statusBar msg
-logError (ErrLog _) (Right _) = return ()

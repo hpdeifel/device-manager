@@ -9,12 +9,6 @@ Category:            System
 Build-Type:          Simple
 Cabal-Version:       >=1.8
                      
--- TODO Complete Other-modules list
-
-Flag udisks2
-  Description: Build experimental udisks2 support
-  Default: True
-
 Executable devman
   Main-Is:             Main.hs
   Other-Modules:       DBus.UDisks2.Types,
@@ -39,35 +33,22 @@ Executable devman
   Hs-Source-Dirs:      src
 
 Executable devnotify
-  if flag(udisks2)
-    Buildable: False
   Main-Is:             Notifications.hs
-  Other-modules:       DBus.UDisks2.Types
-  Build-Depends:       base >=4.6 && <4.9,
-                       dbus ==0.10.*,
-                       containers ==0.5.*,
-                       process >=1.1 && <1.3,
-                       text >=0.11 && <1.3
-  Hs-Source-Dirs:      src
-
-Executable udisks2test
-  if !flag(udisks2)
-    Buildable: False
-  Hs-Source-Dirs:      src
-  Build-Depends:       base >=4.6 && <4.9,
-                       dbus ==0.10.*,
-                       text >=0.11 && <1.3,
-                       bytestring >= 0.10 && <0.11,
-                       vector ==0.10.*,
-                       containers ==0.5.*,
-                       transformers ==0.4.*,
-                       lens ==4.12.*,
-                       stm ==2.4.*,
-                       mtl ==2.2.*
-  Main-Is:             UDisks2Main.hs
   Other-Modules:       DBus.UDisks2.Types,
                        DBus.DBusAbstraction,
                        DBus.UDisks2,
                        DBus.UDisks2.Simple,
                        DBus.UDisks2.Operations,
                        DBus.UDisks2.Internal
+  Build-Depends:       base >=4.6 && <4.9,
+                       dbus ==0.10.*,
+                       containers ==0.5.*,
+                       process >=1.1 && <1.3,
+                       text >=0.11 && <1.3,
+                       bytestring >= 0.10 && <0.11,
+                       vector ==0.10.*,
+                       transformers ==0.4.*,
+                       lens ==4.12.*,
+                       stm ==2.4.*,
+                       mtl ==2.2.*
+  Hs-Source-Dirs:      src

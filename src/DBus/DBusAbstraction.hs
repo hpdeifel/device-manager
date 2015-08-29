@@ -19,6 +19,7 @@ module DBus.DBusAbstraction
        , Properties(..)
        , JustAPath(..)
        , listenWild
+       , matchSignal
        ) where
 
 import DBus
@@ -87,7 +88,12 @@ listenWild :: Client -> ObjectPath -> (Signal -> IO ()) -> IO SignalHandler
 listenWild client basePath = addMatch client rule
   where rule = matchAny { matchPathNamespace = Just basePath}
 
-
+matchSignal :: (SaneDBusObject o) => o -> MemberName -> MatchRule
+matchSignal obj sig = matchAny
+  { matchPath = Just $ getObjectPath obj
+  , matchMember = Just sig
+  , matchInterface = Just $ getInterface (ifaceOf obj)
+  }
 
 getProperty :: (SaneDBusObject o, Implements o Properties) => Client -> o -> String -> IO Variant
 getProperty client obj prop = do

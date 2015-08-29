@@ -45,7 +45,7 @@ main = do
   c <- newCollection
   _ <- addToCollection c layout fg
 
-  errLog <- ErrLog <$> newChan
+  let errLog = ErrLog statusBar
 
   connect >>= \case
     Left err -> do
@@ -65,7 +65,6 @@ main = do
       forM_ devs $ \d -> addDevice lst d
 
       void $ forkIO $ eventThread lst con
-      void $ forkIO $ logThread errLog statusBar
 
       runUi c defaultContext { focusAttr = black `on` yellow }
 
@@ -113,13 +112,9 @@ getIndices lst = do
     return (i, dev)
 
 
-newtype ErrLog = ErrLog (Chan T.Text)
+newtype ErrLog = ErrLog (Widget FormattedText)
 
 logError :: ErrLog -> Either T.Text a -> IO ()
-logError (ErrLog chan) (Left err) = writeChan chan err
-logError (ErrLog _) (Right _) = return ()
-
-logThread :: ErrLog -> Widget FormattedText -> IO ()
-logThread (ErrLog chan) statusBar = forever $ do
-  msg <- readChan chan
+logError (ErrLog statusBar) (Left msg) = do
   schedule $ setText statusBar msg
+logError (ErrLog _) (Right _) = return ()

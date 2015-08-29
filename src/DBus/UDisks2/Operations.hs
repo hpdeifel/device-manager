@@ -85,7 +85,7 @@ fsMount iface opts = invoke iface "Mount" [DBus.toVariant opts]
 
 -- Unmount  (IN  a{sv} options);
 fsUnmount :: FileSystemIface -> MountOptions -> Operation ()
-fsUnmount iface opts = invoke iface "Mount" [DBus.toVariant opts]
+fsUnmount iface opts = invoke iface "Unmount" [DBus.toVariant opts]
 
 
 ----------------------------------------------------------------------

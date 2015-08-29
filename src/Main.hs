@@ -117,9 +117,9 @@ newtype ErrLog = ErrLog (Chan T.Text)
 
 logError :: ErrLog -> Either T.Text a -> IO ()
 logError (ErrLog chan) (Left err) = writeChan chan err
-logError (ErrLog chan) (Right _) = return ()
+logError (ErrLog _) (Right _) = return ()
 
 logThread :: ErrLog -> Widget FormattedText -> IO ()
 logThread (ErrLog chan) statusBar = forever $ do
   msg <- readChan chan
-  setText statusBar msg
+  schedule $ setText statusBar msg

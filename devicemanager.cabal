@@ -10,13 +10,14 @@ Build-Type:          Simple
 Cabal-Version:       >=1.8
                      
 Executable devman
-  Main-Is:             Main.hs
+  Main-Is:             MainBrick.hs
   Other-Modules:       DBus.UDisks2.Types,
                        DBus.DBusAbstraction,
                        DBus.UDisks2,
                        DBus.UDisks2.Simple,
                        DBus.UDisks2.Operations,
-                       DBus.UDisks2.Internal
+                       DBus.UDisks2.Internal,
+                       Brick.Widgets.DeviceList
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
                        text >=0.11 && <1.3,
@@ -27,8 +28,8 @@ Executable devman
                        lens ==4.12.*,
                        stm ==2.4.*,
                        mtl ==2.2.*,
-                       vty ==5.2.*,
-                       vty-ui ==1.9.*
+                       brick ==0.2.*,
+                       vty ==5.4.*
   Ghc-Options:         -threaded
   Hs-Source-Dirs:      src
 

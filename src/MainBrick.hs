@@ -90,13 +90,13 @@ eventThread con chan = forever $ do
 mountUnmount :: AppState -> IO AppState
 mountUnmount as@AppState{..} = case listSelectedElement devList of
   Nothing -> return $ showMessage as "No device selected"
-  Just (_, dev) -> do
-    let mount' c d = fmap (fmap (const ())) $ mount c d
-        action :: Connection -> Device -> IO (Either Text ())
-        action = if devMounted dev then unmount else mount'
-    action connection dev >>= \case
-      Left err -> return $ showMessage as $ "error: " <> err
-      Right _  -> return as
+  Just (_, dev)
+    | devMounted dev  -> unmount connection dev >>= \case
+        Left err -> return $ showMessage as $ "error: " <> err
+        Right () -> return $ showMessage as $ "Device unmounted"
+    | otherwise       -> mount connection dev >>= \case
+        Left err -> return $ showMessage as $ "error: " <> err
+        Right mp -> return $ showMessage as $ "Device mounted at " <> mp
 
 showMessage :: AppState -> Text -> AppState
 showMessage as msg = as { message = msg }

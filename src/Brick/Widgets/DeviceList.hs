@@ -111,6 +111,9 @@ positive :: Int -> Int
 positive = max 0
 
 -- Distributes the free space over the individual elements
+
+-- TODO With the current algorithm, adding or mounting a device changes the size
+-- of every column. We should settle for something less jumpy.
 expand :: Int -> [Int] -> [Int]
 expand total elems = elems'
   where remaining = total - sum elems

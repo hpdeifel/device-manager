@@ -18,17 +18,20 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.Chan
 import Data.Default
+import Data.Monoid
+import Control.Monad.IO.Class
 
 data AppState = AppState {
   devList :: List Device,
-  message :: Text
+  message :: Text,
+  connection :: Connection
 }
 
 data AppEvent = DBusEvent Event
               | VtyEvent Vty.Event
 
 draw :: AppState -> [Widget]
-draw (AppState dl msg) = [w]
+draw (AppState dl msg _) = [w]
   where w =     renderDeviceList dl
             <=> hBorder
             <=> txt msg
@@ -36,6 +39,8 @@ draw (AppState dl msg) = [w]
 handler :: AppState -> AppEvent -> (EventM (Next AppState))
 handler appState@AppState{..} e = case e of
   VtyEvent (EvKey (KChar 'q') []) -> halt appState
+  VtyEvent (EvKey KEnter []) ->
+    liftIO (mountUnmount appState) >>= continue
   VtyEvent e' ->
     handleEvent e' devList >>= continueWith . onList . const
   DBusEvent (DeviceAdded dev) ->
@@ -75,12 +80,26 @@ main = do
   forkIO $ eventThread con eventChan
 
   void $ customMain (mkVty def) eventChan app $
-    AppState devList "Welcome"
+    AppState devList "Welcome" con
 
 eventThread :: Connection -> Chan AppEvent -> IO ()
 eventThread con chan = forever $ do
   ev <- nextEvent con
   writeChan chan (DBusEvent ev)
+
+mountUnmount :: AppState -> IO AppState
+mountUnmount as@AppState{..} = case listSelectedElement devList of
+  Nothing -> return $ showMessage as "No device selected"
+  Just (_, dev) -> do
+    let mount' c d = fmap (fmap (const ())) $ mount c d
+        action :: Connection -> Device -> IO (Either Text ())
+        action = if devMounted dev then unmount else mount'
+    action connection dev >>= \case
+      Left err -> return $ showMessage as $ "error: " <> err
+      Right _  -> return as
+
+showMessage :: AppState -> Text -> AppState
+showMessage as msg = as { message = msg }
 
 -- not onLisp!
 onList :: (List Device -> List Device) -> AppState -> AppState

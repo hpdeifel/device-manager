@@ -62,17 +62,15 @@ renderDeviceList list = Widget Fixed Greedy $ do
 hFix :: Int -> Widget -> Widget
 hFix width = hLimit width . padRight Max
 
-
 nameColumn :: Device -> Text
-nameColumn = devName
+nameColumn = padWhenEmpty . devName
 
 devFileColumn :: Device -> Text
-devFileColumn = devFile
+devFileColumn = padWhenEmpty . devFile
 
 mountPointColumn :: Device -> Text
-mountPointColumn dev
-  | V.null (devMountPoints dev) = " "
-  | otherwise = T.intercalate "," $ V.toList $ devMountPoints dev
+mountPointColumn dev = padWhenEmpty $
+  T.intercalate "," $ V.toList $ devMountPoints dev
 
 mountedColumn :: Device -> Text
 mountedColumn = bool " " "✔" . devMounted
@@ -82,6 +80,11 @@ minColumnWidth header content devs = max maxWidth (T.length header) + 2
   where maxWidth
           | V.null devs  = 0
           | otherwise = V.maximum $ V.map (T.length . content) devs
+
+padWhenEmpty :: Text -> Text
+padWhenEmpty t
+  | T.null t  = " "
+  | otherwise = t
 
 positive :: Int -> Int
 positive = max 0

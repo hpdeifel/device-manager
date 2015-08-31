@@ -8,6 +8,7 @@ module Brick.Widgets.DeviceList
 
 import Brick
 import Brick.Widgets.List
+import Brick.Widgets.Border
 import DBus.UDisks2.Simple
 
 import qualified Data.Vector as V
@@ -54,7 +55,7 @@ renderDeviceList list = Widget Fixed Fixed $ do
              <+> hFix fileWidth (txt "Device")
              <+> hFix mountPointWidth (txt "Mount Point")
 
-  render $ renderHeader <=> txt " " <=> renderList list renderRow
+  render $ renderHeader <=> hBorder <=> renderList list renderRow
 
 hFix :: Int -> Widget -> Widget
 hFix width = hLimit width . padRight Max
@@ -76,7 +77,9 @@ mountedColumn = bool " " "✔" . devMounted
 
 minColumnWidth :: Text -> (Device -> Text) -> (Vector Device) -> Int
 minColumnWidth header content devs = max maxWidth (T.length header) + 2
-  where maxWidth = V.maximum $ V.map (T.length . content) devs
+  where maxWidth
+          | V.null devs  = 0
+          | otherwise = V.maximum $ V.map (T.length . content) devs
 
 positive :: Int -> Int
 positive = max 0

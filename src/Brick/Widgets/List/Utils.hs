@@ -15,4 +15,4 @@ listRemoveEq e l = case l^.listElementsL.to (V.elemIndex e) of
 listSwap :: Eq e => e -> e -> List e -> List e
 listSwap old new l = case l^.listElementsL.to (V.elemIndex old) of
   Nothing -> listAppend new l
-  Just i  -> listInsert i new $ listRemove i l
+  Just i  -> listMoveTo i $ listInsert i new $ listRemove i l

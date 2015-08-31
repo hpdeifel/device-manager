@@ -19,6 +19,11 @@ import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Bool
 import Control.Lens
+import Data.Monoid
+import Data.Word
+import Data.Maybe
+import Text.Printf
+import Data.List
 
 newDeviceList :: Name -> [Device] -> List Device
 newDeviceList name devs = list name (V.fromList devs) itemHeight
@@ -37,8 +42,8 @@ renderDeviceList list = Widget Fixed Greedy $ do
 
       [nameWidth, fileWidth, mountPointWidth]
         = expand notMountedWidth
-                 [ minColumnWidth "Name" nameColumn devs
-                 , minColumnWidth "Device" devFileColumn devs
+                 [ minColumnWidth "Device" nameColumn devs
+                 , minColumnWidth "File" devFileColumn devs
                  , minColumnWidth "Mount Point" mountPointColumn devs
                  ]
 
@@ -53,8 +58,8 @@ renderDeviceList list = Widget Fixed Greedy $ do
 
       renderHeader =
                  hFix mountedWidth (txt "Mounted")
-             <+> hFix nameWidth (txt "Name")
-             <+> hFix fileWidth (txt "Device")
+             <+> hFix nameWidth (txt "Device")
+             <+> hFix fileWidth (txt "File")
              <+> hFix mountPointWidth (txt "Mount Point")
 
   render $ renderHeader <=> hBorder <=> renderList list renderRow
@@ -63,7 +68,23 @@ hFix :: Int -> Widget -> Widget
 hFix width = hLimit width . padRight Max
 
 nameColumn :: Device -> Text
-nameColumn = padWhenEmpty . devName
+nameColumn dev = formatSize dev <> optionally (devName dev)
+
+formatSize :: Device -> Text
+formatSize dev = si (devSize dev)
+
+si :: Word64 -> Text
+si size = T.pack $ printf "%.1f %s" fitSize fitUnit
+  where sizes = iterate (/1000.0) (fromIntegral size) :: [Double]
+        units = ["B", "kB", "MB", "GB", "TB"] :: [String]
+        both  = zip sizes units
+
+        (fitSize, fitUnit) = fromMaybe (last both) $ find ((<1000.0) . fst) both
+
+optionally :: Text -> Text
+optionally t
+  | T.null t  = ""
+  | otherwise = " (" <> t <> ")"
 
 devFileColumn :: Device -> Text
 devFileColumn = padWhenEmpty . devFile

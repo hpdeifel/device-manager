@@ -3,7 +3,7 @@
 
 -- | This module provides a much simpler interface to the udisks daemon.
 module DBus.UDisks2.Simple
-       ( Device(Device,devMountPoints,devFile,devName)
+       ( Device(Device,devMountPoints,devFile,devName,devSize)
        , devMounted
        , Event(..)
        , Connection
@@ -29,6 +29,7 @@ import Data.Maybe
 import Data.Function
 import Data.Traversable
 import Data.Monoid
+import Data.Word
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
@@ -41,7 +42,8 @@ data Device = Device {
   devId :: U.ObjectId,
   devMountPoints :: Vector MountPoint,
   devFile :: Text,
-  devName :: Text
+  devName :: Text,
+  devSize :: Word64
 } deriving (Show)
 
 instance Eq Device where (==) = (==) `on` devId
@@ -152,6 +154,7 @@ convertDevice objMap objId (U.BlockDevObject obj)
           obj ^. U.blockDevFS ^? _Just . U.fsMountPoints
      , devFile = obj ^. U.blockDevBlock . U.blockPreferredDevice
      , devName = obj ^. U.blockDevBlock . U.blockIdLabel
+     , devSize = obj ^. U.blockDevBlock . U.blockSize
      }
 convertDevice _ _ _ = Nothing
 

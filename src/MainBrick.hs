@@ -38,11 +38,8 @@ draw (AppState dl msg _) = [w]
 
 handler :: AppState -> AppEvent -> (EventM (Next AppState))
 handler appState@AppState{..} e = case e of
-  VtyEvent (EvKey (KChar 'q') []) -> halt appState
-  VtyEvent (EvKey KEnter []) ->
-    liftIO (mountUnmount appState) >>= continue
-  VtyEvent e' ->
-    handleEvent e' devList >>= continueWith . onList . const
+  VtyEvent e'@(EvKey _ _) -> handleKey e'
+  VtyEvent _ -> continue appState
   DBusEvent (DeviceAdded dev) ->
     continueWith $ onList (listAppend dev)
   DBusEvent (DeviceRemoved dev) ->
@@ -52,6 +49,12 @@ handler appState@AppState{..} e = case e of
 
   where continueWith :: (AppState -> AppState) -> EventM (Next AppState)
         continueWith f = return (f appState) >>= continue
+
+        handleKey (EvKey (KChar 'q') []) = halt appState
+        handleKey (EvKey KEnter []) =
+          liftIO (mountUnmount appState) >>= continue
+        handleKey e = handleHJKLEvent e devList >>=
+          continueWith . onList . const
 
 theme :: AttrMap
 theme = attrMap defAttr

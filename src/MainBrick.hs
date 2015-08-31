@@ -3,23 +3,28 @@ module Main where
 
 import Brick
 import Brick.Widgets.DeviceList
+import Brick.Widgets.Border
 import Graphics.Vty hiding (Event)
 import qualified Graphics.Vty as Vty
 
 import DBus.UDisks2.Simple
 
 import qualified Data.Text.IO as T
+import Data.Text (Text)
 import System.Exit
 import System.IO
 import Control.Monad
 
 data AppState = AppState {
-  devList :: List Device
+  devList :: List Device,
+  message :: Text
 }
 
 draw :: AppState -> [Widget]
-draw (AppState dl) = [w]
-  where w = renderDeviceList dl
+draw (AppState dl msg) = [w]
+  where w =     renderDeviceList dl
+            <=> hBorder
+            <=> txt msg
 
 handler :: AppState -> Vty.Event -> (EventM (Next AppState))
 handler appState e = case e of
@@ -47,4 +52,4 @@ main = do
             , appLiftVtyEvent = id
             }
 
-  void $ defaultMain app (AppState devList)
+  void $ defaultMain app (AppState devList "Welcome")

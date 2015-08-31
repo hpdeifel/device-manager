@@ -23,7 +23,7 @@ newDeviceList name devs = list name (V.fromList devs) itemHeight
   where itemHeight = 1
 
 renderDeviceList :: List Device -> Widget
-renderDeviceList list = Widget Fixed Fixed $ do
+renderDeviceList list = Widget Fixed Greedy $ do
   let devs = listElements list
 
   c <- getContext

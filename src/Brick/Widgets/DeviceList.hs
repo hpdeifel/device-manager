@@ -4,10 +4,12 @@ module Brick.Widgets.DeviceList
        ( newDeviceList
        , renderDeviceList
        , module Brick.Widgets.List
+       , module Brick.Widgets.List.Utils
        ) where
 
 import Brick
 import Brick.Widgets.List
+import Brick.Widgets.List.Utils
 import Brick.Widgets.Border
 import DBus.UDisks2.Simple
 

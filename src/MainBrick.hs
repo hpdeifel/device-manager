@@ -11,6 +11,7 @@ import qualified Graphics.Vty as Vty
 import DBus.UDisks2.Simple
 
 import qualified Data.Text.IO as T
+import qualified Data.Text as T
 import Data.Text (Text)
 import System.Exit
 import System.IO
@@ -38,7 +39,9 @@ draw (AppState dl msg _) = [w]
 
 handler :: AppState -> AppEvent -> (EventM (Next AppState))
 handler appState@AppState{..} e = case e of
-  VtyEvent e'@(EvKey _ _) -> handleKey e'
+  VtyEvent e'@(EvKey _ _) ->
+    return (clearMessage appState)  -- clear message on every keystroke
+    >>= handleKey e'
   VtyEvent _ -> continue appState
   DBusEvent (DeviceAdded dev) ->
     continueWith $ onList (listAppend dev)
@@ -50,11 +53,12 @@ handler appState@AppState{..} e = case e of
   where continueWith :: (AppState -> AppState) -> EventM (Next AppState)
         continueWith f = return (f appState) >>= continue
 
-        handleKey (EvKey (KChar 'q') []) = halt appState
-        handleKey (EvKey KEnter []) =
-          liftIO (mountUnmount appState) >>= continue
-        handleKey e = handleHJKLEvent e devList >>=
-          continueWith . onList . const
+        handleKey (EvKey (KChar 'q') []) as = halt as
+        handleKey (EvKey KEnter []) as =
+          liftIO (mountUnmount as) >>= continue
+        handleKey e as = do
+          lst' <- handleHJKLEvent e devList
+          continue $ as { devList = lst' }
 
 theme :: AttrMap
 theme = attrMap defAttr
@@ -103,6 +107,9 @@ mountUnmount as@AppState{..} = case listSelectedElement devList of
 
 showMessage :: AppState -> Text -> AppState
 showMessage as msg = as { message = msg }
+
+clearMessage :: AppState -> AppState
+clearMessage = flip showMessage " "
 
 -- not onLisp!
 onList :: (List Device -> List Device) -> AppState -> AppState

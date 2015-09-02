@@ -161,17 +161,15 @@ positive :: Int -> Int
 positive = max 0
 
 -- Distributes the free space over the individual elements
-
--- TODO With the current algorithm, adding or mounting a device changes the size
--- of every column. We should settle for something less jumpy.
+-- TODO Allow overlong columns to steal width from the others
 expand :: Int -> [Int] -> [Int]
 expand total elems = elems'
-  where remaining = total - sum elems
-        num       = length elems
-        elems'    = zipWith (+)
-                      (toZero (remaining `rem` num))
-                      (map (+(remaining `div` num)) elems)
-
+  where part = total `div` num
+        remaining = total `rem` num
+        num = length elems
+        elems' = zipWith (+)
+                  ((replicate remaining 1) ++ repeat 0)
+                  (replicate num part)
 
 toZero :: Int -> [Int]
 toZero 0 = repeat 0

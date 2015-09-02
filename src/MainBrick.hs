@@ -76,12 +76,18 @@ handler appState@AppState{..} e = case e of
 
         handleKey (EvKey (KChar 'q') []) as = halt as
         handleKey (EvKey (KChar '?') []) as = continue (showHelp as)
-        handleKey (EvKey KEsc []) as = continue (hideHelp as)
-        handleKey (EvKey KEnter []) as =
+        handleKey e as = case shownHelp of
+          Nothing -> handleListKey e as
+          Just _  -> handleDialogKey e as
+
+        handleListKey (EvKey KEnter []) as =
           liftIO (mountUnmount as) >>= continue
-        handleKey e as = do
+        handleListKey e as = do
           lst' <- handleHJKLEvent e devList
           continue $ as { devList = lst' }
+
+        handleDialogKey (EvKey KEsc []) as = continue (hideHelp as)
+        handleDialogKey _  as = continue as
 
 theme :: AttrMap
 theme = attrMap defAttr

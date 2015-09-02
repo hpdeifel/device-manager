@@ -32,3 +32,16 @@ Then run the following commands in the toplevel directory:
     runhaskell Setup.hs configure --bindir ~/whatever
 	runhaskell Setup.hs build
 	runhaskell Setup.hs install
+
+## Usage
+
+There are two independent executable:
+
+### devman
+
+The actual terminal UI. Its usage should be pretty straightforward.
+
+### devnotify
+
+A small programm that displays desktop notifications for various
+events concerning devices, such as plugging in or removing devices.

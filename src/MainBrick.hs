@@ -5,6 +5,8 @@ module Main where
 import Brick
 import Brick.Widgets.DeviceList
 import Brick.Widgets.Border
+import Brick.Widgets.Dialog
+import Brick.Widgets.HelpMessage
 import Graphics.Vty hiding (Event, nextEvent)
 import qualified Graphics.Vty as Vty
 
@@ -21,21 +23,40 @@ import Control.Concurrent.Chan
 import Data.Default
 import Data.Monoid
 import Control.Monad.IO.Class
+import Data.Maybe
 
 data AppState = AppState {
   devList :: List Device,
   message :: Text,
+  shownHelp :: Maybe KeyBindings,
   connection :: Connection
 }
 
 data AppEvent = DBusEvent Event
               | VtyEvent Vty.Event
 
+helpMsg :: KeyBindings
+helpMsg =
+  [ ("General",
+     [ ("q", "Quit")
+     , ("Esc", "Close dialog")
+     ])
+  , ("Movement",
+     [ ("j, Down", "Select next device")
+     , ("k, Up", "Select previous device")
+     , ("g, Home", "Select first device")
+     , ("G, End", "Select last device")
+     ])
+  , ("Device operations",
+     [ ("RET", "Mount or unmount device")])]
+
 draw :: AppState -> [Widget]
-draw (AppState dl msg _) = [w]
+draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
   where w =     renderDeviceList dl
             <=> hBorder
             <=> txt msg
+
+        dia' = help <$> dia
 
 handler :: AppState -> AppEvent -> (EventM (Next AppState))
 handler appState@AppState{..} e = case e of
@@ -54,6 +75,8 @@ handler appState@AppState{..} e = case e of
         continueWith f = return (f appState) >>= continue
 
         handleKey (EvKey (KChar 'q') []) as = halt as
+        handleKey (EvKey (KChar '?') []) as = continue (showHelp as)
+        handleKey (EvKey KEsc []) as = continue (hideHelp as)
         handleKey (EvKey KEnter []) as =
           liftIO (mountUnmount as) >>= continue
         handleKey e as = do
@@ -87,7 +110,7 @@ main = do
   forkIO $ eventThread con eventChan
 
   void $ customMain (mkVty def) eventChan app $
-    AppState devList "Welcome" con
+    AppState devList "Welcome" Nothing con
 
 eventThread :: Connection -> Chan AppEvent -> IO ()
 eventThread con chan = forever $ do
@@ -110,6 +133,13 @@ showMessage as msg = as { message = msg }
 
 clearMessage :: AppState -> AppState
 clearMessage = flip showMessage " "
+
+showHelp :: AppState -> AppState
+showHelp as = as { shownHelp = Just bindings }
+  where bindings = helpMsg
+
+hideHelp :: AppState -> AppState
+hideHelp as = as { shownHelp = Nothing }
 
 -- not onLisp!
 onList :: (List Device -> List Device) -> AppState -> AppState

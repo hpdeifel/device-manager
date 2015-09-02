@@ -18,7 +18,8 @@ Executable devman
                        DBus.UDisks2.Operations,
                        DBus.UDisks2.Internal,
                        Brick.Widgets.DeviceList,
-                       Brick.Widgets.List.Utils
+                       Brick.Widgets.List.Utils,
+                       Brick.Widgets.HelpMessage
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
                        text >=0.11 && <1.3,

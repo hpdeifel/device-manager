@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Brick.Widgets.HelpMessage
        ( Title
-       , KeyBindings
+       , KeyBindings(..)
        , help
        , helpAttr
+       , resetHelpWidget
        ) where
 
 import Brick
 import Brick.Markup
 import Brick.Widgets.Border
 import Graphics.Vty
-import Data.Text.Markup
 import Data.Text (Text)
 import Data.Monoid
 import Data.List
@@ -19,7 +19,7 @@ import Control.Lens
 type Title = Text
 
 -- [(Title, [(Key, Description)])]
-type KeyBindings = [(Title, [(Text, Text)])]
+newtype KeyBindings = KeyBindings [(Title, [(Text, Text)])]
 
 help :: KeyBindings -> Widget
 help bindings = center $ helpWidget bindings
@@ -36,13 +36,32 @@ center w = Widget Fixed Fixed $ do
   render $ translateBy (Location (x,y)) $ raw (res^.imageL)
 
 helpWidget :: KeyBindings -> Widget
-helpWidget bindings = Widget Fixed Fixed $ do
+helpWidget (KeyBindings bindings) = Widget Fixed Fixed $ do
   c <- getContext
 
-  render $ hLimit (min 80 $ c^.availWidthL `div` 2) $
+  render $
+    hLimit (min 80 $ c^.availWidthL) $
+    vLimit (min 30 $ c^.availHeightL) $
     borderWithLabel (txt "Help") $
+    viewport "helpViewport" Vertical $
     vBox $ intersperse (txt " ") $
     map (uncurry section) bindings
+
+scroller :: ViewportScroll
+scroller = viewportScroll "helpViewport"
+
+instance HandleEvent KeyBindings where
+  handleEvent (EvKey k []) b = case k of
+    KChar 'j' -> vScrollBy scroller 1 >> return b
+    KChar 'k' -> vScrollBy scroller (-1) >> return b
+    KChar 'g' -> vScrollToBeginning scroller >> return b
+    KChar 'G' -> vScrollToEnd scroller >> return b
+
+  handleEvent _ b = return b
+
+
+resetHelpWidget :: EventM ()
+resetHelpWidget = vScrollToBeginning scroller
 
 key :: Text -> Text -> Widget
 key k h =  markup (("  " <> k) @? (helpAttr <> "key"))

@@ -36,7 +36,7 @@ data AppEvent = DBusEvent Event
               | VtyEvent Vty.Event
 
 helpMsg :: KeyBindings
-helpMsg =
+helpMsg = KeyBindings
   [ ("General",
      [ ("q", "Quit")
      , ("Esc", "Close dialog")
@@ -75,10 +75,12 @@ handler appState@AppState{..} e = case e of
         continueWith f = return (f appState) >>= continue
 
         handleKey (EvKey (KChar 'q') []) as = halt as
-        handleKey (EvKey (KChar '?') []) as = continue (showHelp as)
+        handleKey (EvKey (KChar '?') []) as = do
+          resetHelpWidget
+          continue (showHelp as)
         handleKey e as = case shownHelp of
           Nothing -> handleListKey e as
-          Just _  -> handleDialogKey e as
+          Just b  -> handleDialogKey b e as
 
         handleListKey (EvKey KEnter []) as =
           liftIO (mountUnmount as) >>= continue
@@ -86,8 +88,8 @@ handler appState@AppState{..} e = case e of
           lst' <- handleHJKLEvent e devList
           continue $ as { devList = lst' }
 
-        handleDialogKey (EvKey KEsc []) as = continue (hideHelp as)
-        handleDialogKey _  as = continue as
+        handleDialogKey _ (EvKey KEsc []) as = continue (hideHelp as)
+        handleDialogKey b e as = void (handleEvent e b) >> continue as
 
 theme :: AttrMap
 theme = attrMap defAttr

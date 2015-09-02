@@ -3,7 +3,7 @@
 ### The `curl | sh` approach
 
 Install [`stack`](https://github.com/commercialhaskell/stack) and
-clone the this repository:
+clone this repository:
 
     git clone -b brick https://github.com/rootzlevel/device-manager.git
 
@@ -26,7 +26,7 @@ or install it locally with `stack setup`.
 
 Install GHC and all the dependencies listed in the `.cabal` file.
 Download and install the
-[patched version of the haskell-dbus](https://gitlab.com/hpdeifel/haskell-dbus/tree/path_namespace).
+[patched version of the haskell-dbus library](https://gitlab.com/hpdeifel/haskell-dbus/tree/path_namespace).
 Then run the following commands in the toplevel directory:
 
     runhaskell Setup.hs configure --bindir ~/whatever
@@ -35,7 +35,7 @@ Then run the following commands in the toplevel directory:
 
 ## Usage
 
-There are two independent executable:
+There are two independent executables:
 
 ### devman
 
@@ -44,4 +44,4 @@ The actual terminal UI. Its usage should be pretty straightforward.
 ### devnotify
 
 A small programm that displays desktop notifications for various
-events concerning devices, such as plugging in or removing devices.
+events such as plugging in or removing devices.

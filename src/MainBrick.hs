@@ -120,7 +120,7 @@ main = do
   forkIO $ eventThread con eventChan
 
   void $ customMain (mkVty def) eventChan app $
-    AppState devList "Welcome" Nothing con
+    AppState devList "Welcome! Press '?' to get help." Nothing con
 
 eventThread :: Connection -> Chan AppEvent -> IO ()
 eventThread con chan = forever $ do

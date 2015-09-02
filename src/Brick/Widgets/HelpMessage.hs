@@ -51,11 +51,17 @@ scroller :: ViewportScroll
 scroller = viewportScroll "helpViewport"
 
 instance HandleEvent KeyBindings where
-  handleEvent (EvKey k []) b = case k of
+  handleEvent (EvKey k _) b = case k of
     KChar 'j' -> vScrollBy scroller 1 >> return b
+    KDown     -> vScrollBy scroller 1 >> return b
     KChar 'k' -> vScrollBy scroller (-1) >> return b
+    KUp       -> vScrollBy scroller (-1) >> return b
     KChar 'g' -> vScrollToBeginning scroller >> return b
+    KHome     -> vScrollToBeginning scroller >> return b
     KChar 'G' -> vScrollToEnd scroller >> return b
+    KEnd      -> vScrollToEnd scroller >> return b
+    KPageUp   -> vScrollPage scroller Up >> return b
+    KPageDown -> vScrollPage scroller Down >> return b
 
   handleEvent _ b = return b
 

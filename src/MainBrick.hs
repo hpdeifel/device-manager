@@ -76,7 +76,7 @@ handler appState@AppState{..} e = case e of
 
         handleKey (EvKey (KChar 'q') []) as = halt as
         handleKey (EvKey (KChar '?') []) as = do
-          resetHelpWidget
+          resetHelpWidget -- scroll to the beginning
           continue (showHelp as)
         handleKey e as = case shownHelp of
           Nothing -> handleListKey e as
@@ -93,7 +93,9 @@ handler appState@AppState{..} e = case e of
 
 theme :: AttrMap
 theme = attrMap defAttr
-  [ (listSelectedAttr, defAttr `withBackColor` brightBlack) ]
+  [ (listSelectedAttr, defAttr `withBackColor` brightBlack)
+  , (helpAttr <> "title", fg green)
+  ]
 
 main :: IO ()
 main = do

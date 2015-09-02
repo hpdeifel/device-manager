@@ -21,6 +21,7 @@ import Data.Proxy
 import Data.List (isPrefixOf)
 import Data.String
 import Data.Int
+import Data.Maybe
 
 import Control.Monad.Trans.Except
 import Control.Monad.State
@@ -122,6 +123,43 @@ data BlockDevice = BlockDevice {
 
 makeLenses ''BlockDevice
 
+data Media = NoMedia
+           | Thumb
+           | Flash
+           | FlashCF
+           | FlashMS
+           | FlashSM
+           | FlashSD
+           | FlashSdhc
+           | FlashSdxc
+           | FlashMmc
+           | Floppy
+           | FloppyZip
+           | FloppyJaz
+           | Optical
+           | OpticalCd
+           | OpticalCdR
+           | OpticalCdRw
+           | OpticalDvd
+           | OpticalDvdR
+           | OpticalDvdRw
+           | OpticalDvdRam
+           | OpticalDvdPlusR
+           | OpticalDvdPlusRw
+           | OpticalDvdPlusRDl
+           | OpticalDvdPlusRwDl
+           | OpticalBd
+           | OpticalBdR
+           | OpticalBdRe
+           | OpticalHddvd
+           | OpticalHddvdR
+           | OpticalHddvdRw
+           | OpticalMo
+           | OpticalMrw
+           | OpticalMrwW
+           | Other Text
+           deriving (Show,Eq,Ord)
+
 data DriveIface = DriveIface {
   _driveIObj :: ObjectId,
   _driveIVendor :: Text,
@@ -131,8 +169,8 @@ data DriveIface = DriveIface {
   _driveIWwn :: Text,
   _driveIId :: Text,
   _driveIConfiguration :: Map Text DBus.Variant,
-  _driveIMedia :: Text,
-  _driveIMediaCompatibility :: Vector Text,
+  _driveIMedia :: Media,
+  _driveIMediaCompatibility :: Vector Media,
   _driveIMediaRemovable :: Bool,
   _driveIMediaAvailable :: Bool,
   _driveIMediaChangeDetected :: Bool,
@@ -212,6 +250,46 @@ parseIdType t = case t of
 
 parseConfiguration :: Vector (Text, (Map Text DBus.Variant)) -> Configuration
 parseConfiguration = Configuration
+
+parseMedia :: Text -> Media
+parseMedia t = fromMaybe (Other t) $ lookup t mediaMap
+  where mediaMap =
+           [ (""                       , NoMedia)
+           , ("thumb"                  , Thumb)
+           , ("flash"                  , Flash)
+           , ("flash_cf"               , FlashCF)
+           , ("flash_ms"               , FlashMS)
+           , ("flash_sm"               , FlashSM)
+           , ("flash_sd"               , FlashSD)
+           , ("flash_sdhc"             , FlashSdhc)
+           , ("flash_sdxc"             , FlashSdxc)
+           , ("flash_mmc"              , FlashMmc)
+           , ("floppy"                 , Floppy)
+           , ("floppy_zip"             , FloppyZip)
+           , ("floppy_jaz"             , FloppyJaz)
+           , ("optical"                , Optical)
+           , ("optical_cd"             , OpticalCd)
+           , ("optical_cd_r"           , OpticalCdR)
+           , ("optical_cd_rw"          , OpticalCdRw)
+           , ("optical_dvd"            , OpticalDvd)
+           , ("optical_dvd_r"          , OpticalDvdR)
+           , ("optical_dvd_rw"         , OpticalDvdRw)
+           , ("optical_dvd_ram"        , OpticalDvdRam)
+           , ("optical_dvd_plus_r"     , OpticalDvdPlusR)
+           , ("optical_dvd_plus_rw"    , OpticalDvdPlusRw)
+           , ("optical_dvd_plus_r_dl"  , OpticalDvdPlusRDl)
+           , ("optical_dvd_plus_rw_dl" , OpticalDvdPlusRwDl)
+           , ("optical_bd"             , OpticalBd)
+           , ("optical_bd_r"           , OpticalBdR)
+           , ("optical_bd_re"          , OpticalBdRe)
+           , ("optical_hddvd"          , OpticalHddvd)
+           , ("optical_hddvd_r"        , OpticalHddvdR)
+           , ("optical_hddvd_rw"       , OpticalHddvdRw)
+           , ("optical_mo"             , OpticalMo)
+           , ("optical_mrw"            , OpticalMrw)
+           , ("optical_mrw_w"          , OpticalMrwW)
+           ]
+
 
 changeBlockIface :: BlockIface -> PropertyMap -> FillM BlockIface
 changeBlockIface iface props = flip execStateT iface $ do
@@ -421,8 +499,8 @@ changeDriveIface iface props = flip execStateT iface $ do
   driveIWwn <~? property' "WWN"
   driveIId <~? property' "Id"
   driveIConfiguration <~? property' "Configuration"
-  driveIMedia <~? property' "Media"
-  driveIMediaCompatibility <~? property' "MediaCompatibility"
+  driveIMedia <~? fmap parseMedia <$> property' "Media"
+  driveIMediaCompatibility <~? fmap (V.map parseMedia) <$> property' "MediaCompatibility"
   driveIMediaRemovable <~? property' "MediaRemovable"
   driveIMediaAvailable <~? property' "MediaAvailable"
   driveIMediaChangeDetected <~? property' "MediaChangeDetected"
@@ -456,8 +534,8 @@ fillDriveIface _driveIObj props = do
   _driveIWwn <- property' "WWN"
   _driveIId <- property' "Id"
   _driveIConfiguration <- property' "Configuration"
-  _driveIMedia <- property' "Media"
-  _driveIMediaCompatibility <- property' "MediaCompatibility"
+  _driveIMedia <- parseMedia <$> property' "Media"
+  _driveIMediaCompatibility <- V.map parseMedia <$> property' "MediaCompatibility"
   _driveIMediaRemovable <- property' "MediaRemovable"
   _driveIMediaAvailable <- property' "MediaAvailable"
   _driveIMediaChangeDetected <- property' "MediaChangeDetected"

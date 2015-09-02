@@ -1,12 +1,13 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, RankNTypes #-}
 
 
 -- | This module provides a much simpler interface to the udisks daemon.
 module DBus.UDisks2.Simple
-       ( Device(Device,devMountPoints,devFile,devName,devSize)
+       ( Device(Device,devMountPoints,devFile,devName,devSize,devMediaType)
        , devMounted
        , Event(..)
        , Connection
+       , Media(..)
        , connect
        , disconnect
        , withConnection
@@ -18,6 +19,7 @@ module DBus.UDisks2.Simple
 
 import qualified DBus.UDisks2 as U
 import qualified DBus.UDisks2.Types as U
+import DBus.UDisks2.Types (Media)
 import qualified DBus.UDisks2.Operations as U
 
 import Data.Vector (Vector)
@@ -43,7 +45,8 @@ data Device = Device {
   devMountPoints :: Vector MountPoint,
   devFile :: Text,
   devName :: Text,
-  devSize :: Word64
+  devSize :: Word64,
+  devMediaType :: Media
 } deriving (Show)
 
 instance Eq Device where (==) = (==) `on` devId
@@ -155,6 +158,9 @@ convertDevice objMap objId (U.BlockDevObject obj)
      , devFile = obj ^. U.blockDevBlock . U.blockPreferredDevice
      , devName = obj ^. U.blockDevBlock . U.blockIdLabel
      , devSize = obj ^. U.blockDevBlock . U.blockSize
+     , devMediaType = obj ^. U.blockDevBlock . blockDrive' objMap
+                          ^? _Just . U.driveDrive . U.driveIMedia
+                          ^. to (fromMaybe U.NoMedia)
      }
 convertDevice _ _ _ = Nothing
 
@@ -166,14 +172,9 @@ boring objMap dev = or
   , not removable
   ]
 
-  where removable = case dev ^. U.blockDevBlock . U.blockDrive of
-          Just drive -> objMap ^. at drive
-                               ^? _Just
-                               . U._DriveObject
-                               . U.driveDrive
-                               . U.driveIRemovable
-                               ^. to (fromMaybe False)
-          Nothing -> False
+  where removable = dev ^. U.blockDevBlock . blockDrive' objMap
+                        ^? _Just . U.driveDrive . U.driveIRemovable
+                        ^. to (fromMaybe False)
 
 -- | Returns the new value
 modifyTMVar :: TMVar a -> (a -> a) -> STM a
@@ -181,3 +182,13 @@ modifyTMVar var f = do
   new <- f <$> takeTMVar var
   putTMVar var new
   return new
+
+blockDrive' :: U.ObjectMap -> Lens' U.BlockIface (Maybe U.Drive)
+blockDrive' objMap = lens getter setter
+  where getter :: U.BlockIface -> Maybe U.Drive
+        getter block = block^.U.blockDrive
+                            ^?_Just.to (flip M.lookup objMap)
+                             ._Just.U._DriveObject
+
+        setter :: U.BlockIface -> Maybe U.Drive -> U.BlockIface
+        setter block drive = block & U.blockDrive .~ (drive^?_Just.U.driveObj)

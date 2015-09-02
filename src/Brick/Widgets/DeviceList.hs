@@ -68,10 +68,48 @@ hFix :: Int -> Widget -> Widget
 hFix width = hLimit width . padRight Max
 
 nameColumn :: Device -> Text
-nameColumn dev = formatSize dev <> optionally (devName dev)
+nameColumn dev
+  | devMediaType dev `elem` knownSizeDevices
+    = formatType dev <> pad (optionally (devName dev))
+  | otherwise
+    = padR (formatType dev) <> formatSize dev <> pad (optionally (devName dev))
+
+  where knownSizeDevices =
+           [ OpticalCd
+           , OpticalCdR
+           , OpticalCdRw
+           , OpticalDvd
+           , OpticalDvdR
+           , OpticalDvdRw
+           , OpticalDvdPlusR
+           , OpticalDvdPlusRw
+           , OpticalBd
+           , OpticalBdR
+           , OpticalBdRe
+           ]
 
 formatSize :: Device -> Text
 formatSize dev = si (devSize dev)
+
+formatType :: Device -> Text
+formatType dev = case devMediaType dev of
+  Thumb -> "Thumb drive"
+  Flash -> "Flash drive"
+  FlashSD -> "SD Card"
+  FlashMmc -> "MMC Card"
+  Floppy -> "Floppy"
+  OpticalCd -> "CD"
+  OpticalCdR -> "CD-R"
+  OpticalCdRw -> "CD-RW"
+  OpticalDvd -> "DVD"
+  OpticalDvdR -> "DVD-R"
+  OpticalDvdRw -> "DVD-RW"
+  OpticalDvdPlusR -> "DVD+R"
+  OpticalDvdPlusRw -> "DVD+RW"
+  OpticalBd -> "Blu-ray"
+  OpticalBdR -> "Blu-ray" -- TODO Better name
+  OpticalBdRe -> "Blu-ray" -- TODO Better name
+  _ -> ""
 
 si :: Word64 -> Text
 si size = T.pack $ printf "%.1f %s" fitSize fitUnit
@@ -84,7 +122,19 @@ si size = T.pack $ printf "%.1f %s" fitSize fitUnit
 optionally :: Text -> Text
 optionally t
   | T.null t  = ""
-  | otherwise = " (" <> t <> ")"
+  | otherwise = "(" <> t <> ")"
+
+-- Add a character in front if the text is not empty
+pad :: Text -> Text
+pad t
+  | T.null t = t
+  | otherwise = " " <> t
+
+-- Add a character at tail if the text is not empty
+padR :: Text -> Text
+padR t
+  | T.null t = t
+  | otherwise = t <> " "
 
 devFileColumn :: Device -> Text
 devFileColumn = padWhenEmpty . devFile

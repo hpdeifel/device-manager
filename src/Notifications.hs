@@ -111,25 +111,17 @@ actionCallback con var sig = do
 
   flip (maybe (return ())) dev $ \d -> case action of
       "mount" -> void $ mount con d
-      "open"  -> do
-        mount con d
-        void $ forkIO $ doOpen var d
+      "open"  -> mount con d >>= \case
+        Left err -> return () -- TODO Log error
+        Right mountPoint  -> void $ forkIO $ doOpen mountPoint
       _       -> return ()
 
   putMVar var $ Data devs idM
 
-doOpen :: MVar NoteData -> Device -> IO ()
-doOpen var dev = do
-  let loop = do
-        threadDelay 1000000 -- FIXME
-        case devMountPoints dev !? 0 of
-          Just mp -> do
-            void $ runProcess "xdg-open" [T.unpack mp] Nothing Nothing
-                    Nothing Nothing Nothing
-            return False
-          _ -> return True
-
-  foldM_ (\g _ -> if g then loop else return g) True [1..5::Int]
+doOpen :: Text -> IO ()
+doOpen mountPoint = do
+  void $ runProcess "xdg-open" [T.unpack mountPoint] Nothing Nothing
+    Nothing Nothing Nothing
 
 notify :: DBus.Client -> Text -> Text -> [Text] -> IO (Maybe Word32)
 notify client title body actions = do

@@ -60,10 +60,12 @@ data Event = DeviceAdded Device
            | DeviceRemoved Device
            deriving Show
 
+type ObjectMap = Map U.ObjectId U.Object
+
 data Connection = Connection {
   conUDisks :: U.Connection,
   conDevices :: TMVar (Map U.ObjectId Device),
-  conObjMap :: TMVar U.ObjectMap
+  conObjMap :: TMVar ObjectMap
 }
 
 connect :: IO (Either Text (Connection, [Device]))
@@ -148,7 +150,7 @@ unmount con dev = do
                        U.fsUnmount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support unmounting"
 
-convertDevice :: U.ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
+convertDevice :: ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
 convertDevice objMap objId (U.BlockDevObject obj)
   | boring objMap obj  = Nothing
   | otherwise          = Just $ Device
@@ -164,7 +166,7 @@ convertDevice objMap objId (U.BlockDevObject obj)
      }
 convertDevice _ _ _ = Nothing
 
-boring :: U.ObjectMap -> U.BlockDevice -> Bool
+boring :: ObjectMap -> U.BlockDevice -> Bool
 boring objMap dev = or
   [ dev ^. U.blockDevFS & isn't _Just
   , dev ^. U.blockDevBlock . U.blockHintSystem
@@ -183,7 +185,7 @@ modifyTMVar var f = do
   putTMVar var new
   return new
 
-blockDrive' :: U.ObjectMap -> Lens' U.BlockIface (Maybe U.Drive)
+blockDrive' :: ObjectMap -> Lens' U.BlockIface (Maybe U.Drive)
 blockDrive' objMap = lens getter setter
   where getter :: U.BlockIface -> Maybe U.Drive
         getter block = block^.U.blockDrive

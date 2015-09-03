@@ -1,130 +1,156 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, RecordWildCards #-}
 
-module Main (main) where
+module Main where
 
--- import Graphics.Vty.Widgets.All
-import Graphics.Vty.Widgets.ColumnList
-import Graphics.Vty.Widgets.Core
-import Graphics.Vty.Widgets.EventLoop
-import Graphics.Vty.Widgets.Util
-import Graphics.Vty.Widgets.Text
-import Graphics.Vty.Widgets.Box
-import Graphics.Vty.Widgets.Borders
-import Graphics.Vty
-import Control.Monad
-import Control.Applicative ((<$>))
-import Control.Concurrent
+import Brick
+import Brick.Widgets.DeviceList
+import Brick.Widgets.Border
+import Brick.Widgets.Dialog
+import Brick.Widgets.HelpMessage
+import Graphics.Vty hiding (Event, nextEvent)
+import qualified Graphics.Vty as Vty
+
+import DBus.UDisks2.Simple
+
+import qualified Data.Text.IO as T
 import qualified Data.Text as T
-import Data.List
-import Data.Maybe (isJust)
+import Data.Text (Text)
+import System.Exit
+import System.IO
+import Control.Monad
+import Control.Concurrent
+import Control.Concurrent.Chan
+import Data.Default
+import Data.Monoid
+import Control.Monad.IO.Class
+import Data.Maybe
 
-import DBus.UDisks
-import Common
-import ErrorLogger
+data AppState = AppState {
+  devList :: List Device,
+  message :: Text,
+  shownHelp :: Maybe KeyBindings,
+  connection :: Connection
+}
+
+data AppEvent = DBusEvent Event
+              | VtyEvent Vty.Event
+
+helpMsg :: KeyBindings
+helpMsg = KeyBindings
+  [ ("General",
+     [ ("q", "Quit")
+     , ("Esc", "Close dialog")
+     ])
+  , ("Movement",
+     [ ("j, Down", "Select next device")
+     , ("k, Up", "Select previous device")
+     , ("g, Home", "Select first device")
+     , ("G, End", "Select last device")
+     ])
+  , ("Device operations",
+     [ ("RET", "Mount or unmount device")])]
+
+draw :: AppState -> [Widget]
+draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
+  where w =     renderDeviceList dl
+            <=> hBorder
+            <=> txt msg
+
+        dia' = help <$> dia
+
+handler :: AppState -> AppEvent -> (EventM (Next AppState))
+handler appState@AppState{..} e = case e of
+  VtyEvent e'@(EvKey _ _) ->
+    return (clearMessage appState)  -- clear message on every keystroke
+    >>= handleKey e'
+  VtyEvent _ -> continue appState
+  DBusEvent (DeviceAdded dev) ->
+    continueWith $ onList (listAppend dev)
+  DBusEvent (DeviceRemoved dev) ->
+    continueWith $ onList (listRemoveEq dev)
+  DBusEvent (DeviceChanged old new) ->
+    continueWith $ onList (listSwap old new)
+
+  where continueWith :: (AppState -> AppState) -> EventM (Next AppState)
+        continueWith f = return (f appState) >>= continue
+
+        handleKey (EvKey (KChar 'q') []) as = halt as
+        handleKey (EvKey (KChar '?') []) as = do
+          resetHelpWidget -- scroll to the beginning
+          continue (showHelp as)
+        handleKey e as = case shownHelp of
+          Nothing -> handleListKey e as
+          Just b  -> handleDialogKey b e as
+
+        handleListKey (EvKey KEnter []) as =
+          liftIO (mountUnmount as) >>= continue
+        handleListKey e as = do
+          lst' <- handleHJKLEvent e devList
+          continue $ as { devList = lst' }
+
+        handleDialogKey _ (EvKey KEsc []) as = continue (hideHelp as)
+        handleDialogKey b e as = void (handleEvent e b) >> continue as
+
+theme :: AttrMap
+theme = attrMap defAttr
+  [ (listSelectedAttr, defAttr `withBackColor` brightBlack)
+  , (helpAttr <> "title", fg green)
+  ]
 
 main :: IO ()
 main = do
-  let nameColumn = maybe "No name" T.pack . formatDeviceLabel
-      devFileColumn = T.pack . deviceFile
-      mountPointCol = maybe "" (T.pack . intercalate ",") . mountPoints
-      mountedColumn d = if isMounted d then "✔" else " "
+  (con,devs) <- connect >>= \case
+    Left err -> do
+      T.hPutStrLn stderr err
+      exitWith (ExitFailure 1)
+    Right x -> return x
 
-  lst <- newList defAttr [ ColumnSpec "Mounted" (Fixed 7) mountedColumn
-                         , ColumnSpec "Name" Expand nameColumn
-                         , ColumnSpec "Device" Expand devFileColumn
-                         , ColumnSpec "Mount point" Expand mountPointCol
-                         ]
+  let devList = listMoveTo 0 $ newDeviceList "devices" devs
+      app = App
+            { appDraw = draw
+            , appChooseCursor = neverShowCursor
+            , appHandleEvent = handler
+            , appStartEvent = return
+            , appAttrMap = const theme
+            , appLiftVtyEvent = VtyEvent
+            }
 
-  statusBar <- plainText "Welcome"
+  eventChan <- newChan
 
-  layout <- return lst <--> hBorder <--> return statusBar
+  forkIO $ eventThread con eventChan
 
-  fg <- newFocusGroup
-  addToFocusGroup fg layout
+  void $ customMain (mkVty def) eventChan app $
+    AppState devList "Welcome! Press '?' to get help." Nothing con
 
-  c <- newCollection
-  _ <- addToCollection c layout fg
+eventThread :: Connection -> Chan AppEvent -> IO ()
+eventThread con chan = forever $ do
+  ev <- nextEvent con
+  writeChan chan (DBusEvent ev)
 
-  errLog <- ErrLog <$> newChan
+mountUnmount :: AppState -> IO AppState
+mountUnmount as@AppState{..} = case listSelectedElement devList of
+  Nothing -> return $ showMessage as "No device selected"
+  Just (_, dev)
+    | devMounted dev  -> unmount connection dev >>= \case
+        Left err -> return $ showMessage as $ "error: " <> err
+        Right () -> return $ showMessage as $ "Device unmounted"
+    | otherwise       -> mount connection dev >>= \case
+        Left err -> return $ showMessage as $ "error: " <> err
+        Right mp -> return $ showMessage as $ "Device mounted at " <> mp
 
-  con  <- udisksConnect errLog
-  devs <- getDeviceList con
+showMessage :: AppState -> Text -> AppState
+showMessage as msg = as { message = msg }
 
-  fg `onKeyPressed` \_ key _ ->
-    if key == KChar 'q' then
-      shutdownUi >> return True
-      else return False
+clearMessage :: AppState -> AppState
+clearMessage = flip showMessage " "
 
-  lst `onItemActivated` \(ActivateItemEvent _ dev) -> do
-    if (isJust $ mountPoints dev)
-      then doUnmount con dev
-      else doMount con dev
+showHelp :: AppState -> AppState
+showHelp as = as { shownHelp = Just bindings }
+  where bindings = helpMsg
 
-  chan <- newChan
+hideHelp :: AppState -> AppState
+hideHelp as = as { shownHelp = Nothing }
 
-  forM_ devs $ \d -> do
-    addDevice lst d
-    listenDevice con d chan
-
-  listenEvents con chan
-
-  void $ forkIO $ eventThread lst con chan
-  void $ forkIO $ logThread errLog statusBar
-
-  runUi c defaultContext { focusAttr = black `on` yellow }
-
-type ListWidget = Widget (ColumnList Device)
-
-eventThread :: ListWidget -> (UDisksConnection a) -> Chan UDiskMessage -> IO ()
-eventThread list con chan = forever $ do
-  msg <- readChan chan
-  case msg of
-    DeviceRemoved path -> remDevice list path
-    DeviceAdded   dev  -> addDevice list dev >> listenDevice con dev chan
-    DeviceChanged dev  -> changeDevice list dev
-
-addDevice :: ListWidget -> Device -> IO ()
-addDevice lst d = unless (deviceBoring d) $
-  schedule $ addToList lst d
-
-remDevice :: ListWidget -> ObjectPath -> IO ()
-remDevice lst path = do
-  idx <- getIndex' lst path
-  case idx of
-    Just idx' -> schedule $ removeFromList lst idx' >> return ()
-    Nothing   -> return ()
-
-changeDevice :: ListWidget -> Device -> IO ()
-changeDevice lst dev = do
-  idx <- getIndex lst dev
-  remDevice lst (objectPath dev)
-  case idx of
-    Just idx' -> unless (deviceBoring dev) $
-      schedule $ insertIntoList lst dev idx'
-    Nothing   -> addDevice lst dev
-
-getIndex :: ListWidget -> Device -> IO (Maybe Int)
-getIndex lst dev = getIndex' lst (objectPath dev)
-
-getIndex' :: ListWidget -> ObjectPath -> IO (Maybe Int)
-getIndex' lst path = do
-  indices <- getIndices lst
-  return $ fst <$> find (\(_, dev) -> objectPath dev == path) indices
-
-getIndices :: ListWidget -> IO [(Int, Device)]
-getIndices lst = do
-  count <- getListSize lst
-  forM [0..count-1] $ \i -> do
-    Just dev <- getListItem lst i
-    return (i, dev)
-
-
-newtype ErrLog = ErrLog (Chan T.Text)
-
-instance ErrorLogger ErrLog where
-  logError (ErrLog chan) t = writeChan chan t
-
-logThread :: ErrLog -> Widget FormattedText -> IO ()
-logThread (ErrLog chan) statusBar = forever $ do
-  msg <- readChan chan
-  setText statusBar msg
+-- not onLisp!
+onList :: (List Device -> List Device) -> AppState -> AppState
+onList f appState = appState { devList = f (devList appState)}

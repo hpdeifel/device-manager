@@ -8,25 +8,51 @@ Maintainer:          Hans-Peter Deifel <hpdeifel@gmx.de>
 Category:            System
 Build-Type:          Simple
 Cabal-Version:       >=1.8
-
+                     
 Executable devman
   Main-Is:             Main.hs
+  Other-Modules:       DBus.UDisks2.Types,
+                       DBus.DBusAbstraction,
+                       DBus.UDisks2,
+                       DBus.UDisks2.Simple,
+                       DBus.UDisks2.Operations,
+                       DBus.UDisks2.Internal,
+                       Brick.Widgets.DeviceList,
+                       Brick.Widgets.List.Utils,
+                       Brick.Widgets.HelpMessage
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
-                       containers ==0.5.*,
-                       process >=1.1 && <1.3,
-                       vty-ui >=1.8 && <1.10,
-                       vty >=5.2 && <5.3,
                        text >=0.11 && <1.3,
-                       vector ==0.10.*
+                       bytestring >= 0.10 && <0.11,
+                       vector ==0.10.*,
+                       containers ==0.5.*,
+                       transformers ==0.4.*,
+                       lens ==4.12.*,
+                       stm ==2.4.*,
+                       mtl ==2.2.*,
+                       brick ==0.2.*,
+                       vty ==5.4.*,
+                       data-default ==0.5.*
   Ghc-Options:         -threaded
   Hs-Source-Dirs:      src
 
 Executable devnotify
   Main-Is:             Notifications.hs
+  Other-Modules:       DBus.UDisks2.Types,
+                       DBus.DBusAbstraction,
+                       DBus.UDisks2,
+                       DBus.UDisks2.Simple,
+                       DBus.UDisks2.Operations,
+                       DBus.UDisks2.Internal
   Build-Depends:       base >=4.6 && <4.9,
                        dbus ==0.10.*,
                        containers ==0.5.*,
                        process >=1.1 && <1.3,
-                       text >=0.11 && <1.3
+                       text >=0.11 && <1.3,
+                       bytestring >= 0.10 && <0.11,
+                       vector ==0.10.*,
+                       transformers ==0.4.*,
+                       lens ==4.12.*,
+                       stm ==2.4.*,
+                       mtl ==2.2.*
   Hs-Source-Dirs:      src

@@ -1,0 +1,14 @@
+packages:
+  - '.'
+  - location:
+      git: git@gitlab.com:hpdeifel/haskell-dbus.git
+      commit: acda0d1258adaf93c97831ddcd4ecaedb73985ef
+    extra-dep: true
+
+extra-deps:
+  - vty-5.4.0
+  - QuickCheck-2.7.6
+  - brick-0.2
+  - text-zipper-0.3.1
+
+resolver: lts-3.0

@@ -110,7 +110,7 @@ nextEvent con = loop
             void $ modifyTMVar (conObjMap con) $ M.delete objId
             devs <- takeTMVar (conDevices con)
             putTMVar (conDevices con) $ M.delete objId devs
-            for (M.lookup objId devs)  $ \obj -> do
+            for (M.lookup objId devs)  $ \obj ->
               return $ DeviceRemoved obj
 
           U.ObjectChanged objId obj -> do
@@ -123,7 +123,7 @@ nextEvent con = loop
                   M.alter (const newDev) objId devs
                 return $ DeviceAdded <$> newDev
 
-              Just oldDev -> do
+              Just oldDev ->
                 for newDev $ \newDev' -> do
                   putTMVar (conDevices con) $
                     M.insert objId newDev' devs
@@ -153,9 +153,9 @@ unmount con dev = do
 convertDevice :: ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
 convertDevice objMap objId (U.BlockDevObject obj)
   | boring objMap obj  = Nothing
-  | otherwise          = Just $ Device
+  | otherwise          = Just Device
      { devId = objId
-     , devMountPoints = maybe V.empty id $
+     , devMountPoints = fromMaybe V.empty $
           obj ^. U.blockDevFS ^? _Just . U.fsMountPoints
      , devFile = obj ^. U.blockDevBlock . U.blockPreferredDevice
      , devName = obj ^. U.blockDevBlock . U.blockIdLabel
@@ -189,7 +189,7 @@ blockDrive' :: ObjectMap -> Lens' U.BlockIface (Maybe U.Drive)
 blockDrive' objMap = lens getter setter
   where getter :: U.BlockIface -> Maybe U.Drive
         getter block = block^.U.blockDrive
-                            ^?_Just.to (flip M.lookup objMap)
+                            ^?_Just.to (`M.lookup` objMap)
                              ._Just.U._DriveObject
 
         setter :: U.BlockIface -> Maybe U.Drive -> U.BlockIface

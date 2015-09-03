@@ -79,7 +79,7 @@ main = do
           Data devs idMap <- takeMVar var
 
 
-          when (devMounted old && (not $ devMounted new)) $ do
+          when (devMounted old && not (devMounted new)) $
             void $ notify client "Device unmounted" (mkBody new) []
 
           putMVar var $ Data (new : delete old devs) idMap
@@ -95,7 +95,7 @@ mkBody d = if devName d == "" then devFile d
 
 closedCallback :: MVar NoteData -> DBus.Signal -> IO ()
 closedCallback var sig = do
-  let iD = fromVariant' $ DBus.signalBody sig !! 0
+  let iD = fromVariant' $ head $ DBus.signalBody sig
 
   modifyMVar_ var $ \(Data pathM idM) ->
     return $ Data pathM (M.delete iD idM)
@@ -104,7 +104,7 @@ actionCallback :: Connection -> MVar NoteData -> DBus.Signal -> IO ()
 actionCallback con var sig = do
   Data devs idM <- takeMVar var
 
-  let iD = fromVariant' $ DBus.signalBody sig !! 0
+  let iD = fromVariant' $ head $ DBus.signalBody sig
       action = fromVariant' $ DBus.signalBody sig !! 1 :: String
 
   let dev = M.lookup iD idM
@@ -119,7 +119,7 @@ actionCallback con var sig = do
   putMVar var $ Data devs idM
 
 doOpen :: Text -> IO ()
-doOpen mountPoint = do
+doOpen mountPoint =
   void $ runProcess "xdg-open" [T.unpack mountPoint] Nothing Nothing
     Nothing Nothing Nothing
 
@@ -137,5 +137,5 @@ notify client title body actions = do
     ]
 
   case iD of
-    Left err -> hPutStrLn stderr (show err) >> return Nothing
+    Left err -> hPrint stderr err >> return Nothing
     Right iD' -> return $ Just $ fromVariant' iD'

@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards, OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 {-# LANGUAGE LambdaCase, ScopedTypeVariables, RankNTypes #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module DBus.UDisks2.Internal where
 
@@ -10,28 +9,19 @@ import DBus.DBusAbstraction
 
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
+import Control.Monad.State
 import Control.Exception
 
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Map as M
 import Data.Vector (Vector)
-
-import qualified DBus.Client as DBus
-import qualified DBus
-import DBus.Client (Client)
-
-import Control.Concurrent.STM
-
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import qualified Data.Text as T
-import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Word
-import qualified Data.Map as M
 import Data.Map (Map)
 import Data.Monoid
 import Data.Proxy
@@ -40,10 +30,13 @@ import Data.String
 import Data.Int
 import Data.Maybe
 
-import Control.Monad.Trans.Except
-import Control.Monad.State
 
+import qualified DBus.Client as DBus
 import qualified DBus
+import DBus.Client (Client)
+
+import Control.Concurrent.STM
+
 import Control.Lens.TH
 import Control.Lens (assign, Lens', ASetter, use, (^.))
 
@@ -238,7 +231,7 @@ parseIdType t = case t of
   "raid"       -> IdRaid
   _            -> IdOther t
 
-parseConfiguration :: Vector (Text, (Map Text DBus.Variant)) -> Configuration
+parseConfiguration :: Vector (Text, Map Text DBus.Variant) -> Configuration
 parseConfiguration = Configuration
 
 parseMedia :: Text -> Media
@@ -346,7 +339,7 @@ fillBlockIface _blockObj props = do
         property' = property props
 
 changeFSIface :: FileSystemIface -> PropertyMap -> FillM FileSystemIface
-changeFSIface iface props = flip execStateT iface $ do
+changeFSIface iface props = flip execStateT iface $
   fsMountPoints <~? fmap (V.map decodeUtf8) <$> property' "MountPoints"
 
   where property' :: DBus.IsVariant a => String -> StateT FileSystemIface FillM (Maybe a)
@@ -418,7 +411,7 @@ fillBlockDevice _blockDevObj ifaces = do
   _blockDevFS <- interface'
   _blockDevPartitition <- interface'
   _blockDevLoop <- interface'
-  return $ BlockDevice{..}
+  return BlockDevice{..}
 
   where interface' :: (Show i, FillIface i) => FillM (Maybe i)
         interface' = interface _blockDevObj ifaces
@@ -453,9 +446,8 @@ removeFromBlockDevice dev ifaces
 
         maybeDelete :: forall i. FillIface i => Lens' BlockDevice (Maybe i)
                     -> State BlockDevice ()
-        maybeDelete i = if V.elem (ifaceName (Proxy :: Proxy i)) ifaces
-                         then assign i Nothing
-                         else return ()
+        maybeDelete i = when V.elem (ifaceName (Proxy :: Proxy i)) ifaces $
+                         assign i Nothing
 
 changeBlockDevice :: BlockDevice -> String -> PropertyMap -> FillM BlockDevice
 changeBlockDevice dev iface props = flip execStateT dev $ do
@@ -466,7 +458,7 @@ changeBlockDevice dev iface props = flip execStateT dev $ do
 
   where changeInterface :: forall i. FillIface i => Lens' BlockDevice i -> StateT BlockDevice FillM ()
         changeInterface i
-          | ifaceName (Proxy :: Proxy i) == iface = do
+          | ifaceName (Proxy :: Proxy i) == iface =
               use i >>= lift . flip changeIface props >>= assign i
           | otherwise = return ()
 
@@ -639,16 +631,15 @@ addToDrive drive ifaces = flip execStateT drive $ do
 removeFromDrive :: Drive -> Vector String -> Maybe Drive
 removeFromDrive drive ifaces
   | driveIface `V.elem` ifaces = Nothing
-  | otherwise                  = Just $ flip execState drive $ do
+  | otherwise                  = Just $ flip execState drive $
       maybeDelete driveAta
 
   where driveIface = ifaceName (Proxy :: Proxy DriveIface)
 
         maybeDelete :: forall i. FillIface i => Lens' Drive (Maybe i)
                     -> State Drive ()
-        maybeDelete i = if V.elem (ifaceName (Proxy :: Proxy i)) ifaces
-                         then assign i Nothing
-                         else return ()
+        maybeDelete i = when V.elem (ifaceName (Proxy :: Proxy i)) ifaces $
+                         assign i Nothing
 
 changeDrive :: Drive -> String -> PropertyMap -> FillM Drive
 changeDrive drive iface props = flip execStateT drive $ do
@@ -658,7 +649,7 @@ changeDrive drive iface props = flip execStateT drive $ do
   where changeInterface :: forall i. FillIface i => Lens' Drive i
                         -> StateT Drive FillM ()
         changeInterface i
-          | ifaceName (Proxy :: Proxy i) == iface = do
+          | ifaceName (Proxy :: Proxy i) == iface =
               use i >>= lift . flip changeIface props >>= assign i
           | otherwise = return ()
 

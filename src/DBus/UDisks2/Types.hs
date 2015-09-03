@@ -6,29 +6,15 @@
 
 module DBus.UDisks2.Types where
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as B
 import Data.Text (Text)
-import qualified Data.Text.Encoding as T
-import qualified Data.Text as T
 import Data.Vector (Vector)
-import qualified Data.Vector as V
 import Data.Word
-import qualified Data.Map as M
 import Data.Map (Map)
-import Data.Monoid
-import Data.Proxy
-import Data.List (isPrefixOf)
 import Data.String
 import Data.Int
-import Data.Maybe
-
-import Control.Monad.Trans.Except
-import Control.Monad.State
 
 import qualified DBus
 import Control.Lens.TH
-import Control.Lens (assign, Lens', ASetter, use, (^.))
 
 -- TODO This module contains a lot of duplication.
 --
@@ -48,7 +34,7 @@ data IdType = IdFilesystem | IdCrypto | IdRaid | IdOther Text
             deriving (Show)
 
 -- TODO Better type than DBus.Variant for the configuration value
-newtype Configuration = Configuration (Vector (Text, (Map Text DBus.Variant)))
+newtype Configuration = Configuration (Vector (Text, Map Text DBus.Variant))
                       deriving (Show)
 
 data BlockIface = BlockIface {

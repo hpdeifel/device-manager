@@ -58,11 +58,10 @@ draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
 
         dia' = help <$> dia
 
-handler :: AppState -> AppEvent -> (EventM (Next AppState))
+handler :: AppState -> AppEvent -> EventM (Next AppState)
 handler appState@AppState{..} e = case e of
   VtyEvent e'@(EvKey _ _) ->
-    return (clearMessage appState)  -- clear message on every keystroke
-    >>= handleKey e'
+    handleKey e' (clearMessage appState) -- clear message on every keystroke
   VtyEvent _ -> continue appState
   DBusEvent (DeviceAdded dev) ->
     continueWith $ onList (listAppend dev)
@@ -72,7 +71,7 @@ handler appState@AppState{..} e = case e of
     continueWith $ onList (listSwap old new)
 
   where continueWith :: (AppState -> AppState) -> EventM (Next AppState)
-        continueWith f = return (f appState) >>= continue
+        continueWith f = continue (f appState)
 
         handleKey (EvKey (KChar 'q') []) as = halt as
         handleKey (EvKey (KChar '?') []) as = do
@@ -133,7 +132,7 @@ mountUnmount as@AppState{..} = case listSelectedElement devList of
   Just (_, dev)
     | devMounted dev  -> unmount connection dev >>= \case
         Left err -> return $ showMessage as $ "error: " <> err
-        Right () -> return $ showMessage as $ "Device unmounted"
+        Right () -> return $ showMessage as "Device unmounted"
     | otherwise       -> mount connection dev >>= \case
         Left err -> return $ showMessage as $ "error: " <> err
         Right mp -> return $ showMessage as $ "Device mounted at " <> mp

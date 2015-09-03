@@ -146,7 +146,7 @@ mountPointColumn dev = padWhenEmpty $
 mountedColumn :: Device -> Text
 mountedColumn = bool " " "✔" . devMounted
 
-minColumnWidth :: Text -> (Device -> Text) -> (Vector Device) -> Int
+minColumnWidth :: Text -> (Device -> Text) -> Vector Device -> Int
 minColumnWidth header content devs = max maxWidth (T.length header) + 2
   where maxWidth
           | V.null devs  = 0
@@ -168,7 +168,7 @@ expand total elems = elems'
         remaining = total `rem` num
         num = length elems
         elems' = zipWith (+)
-                  ((replicate remaining 1) ++ repeat 0)
+                  (replicate remaining 1 ++ repeat 0)
                   (replicate num part)
 
 toZero :: Int -> [Int]

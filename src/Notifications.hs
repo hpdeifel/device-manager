@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, LambdaCase #-}
-{-# LANGUAGE OverlappingInstances #-}
 
 module Main where
 

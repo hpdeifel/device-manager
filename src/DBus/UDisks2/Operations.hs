@@ -151,7 +151,7 @@ asPath :: Iso' ObjectId DBus.ObjectPath
 asPath = iso getPath ObjectId
   where getPath (ObjectId path) = path
 
-instance FillIface i => DBusInterface i where
+instance {-# OVERLAPPABLE #-} FillIface i => DBusInterface i where
   getInterface _ = DBus.interfaceName_ $ ifaceName (Proxy :: Proxy i)
 
 udisksDestination :: DBus.BusName

@@ -5,7 +5,7 @@
 Install [`stack`](https://github.com/commercialhaskell/stack) and
 clone this repository:
 
-    git clone -b brick https://github.com/rootzlevel/device-manager.git
+    git clone https://github.com/rootzlevel/device-manager.git
 
 Use stack to download all dependencies, build the code and install the
 binaries to `~/.local/bin`:

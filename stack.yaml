@@ -1,7 +1,7 @@
 packages:
   - '.'
   - location:
-      git: git@gitlab.com:hpdeifel/haskell-dbus.git
+      git: https://gitlab.com/hpdeifel/haskell-dbus.git
       commit: acda0d1258adaf93c97831ddcd4ecaedb73985ef
     extra-dep: true
 

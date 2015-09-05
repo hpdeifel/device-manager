@@ -446,7 +446,7 @@ removeFromBlockDevice dev ifaces
 
         maybeDelete :: forall i. FillIface i => Lens' BlockDevice (Maybe i)
                     -> State BlockDevice ()
-        maybeDelete i = when V.elem (ifaceName (Proxy :: Proxy i)) ifaces $
+        maybeDelete i = when (V.elem (ifaceName (Proxy :: Proxy i)) ifaces) $
                          assign i Nothing
 
 changeBlockDevice :: BlockDevice -> String -> PropertyMap -> FillM BlockDevice
@@ -638,7 +638,7 @@ removeFromDrive drive ifaces
 
         maybeDelete :: forall i. FillIface i => Lens' Drive (Maybe i)
                     -> State Drive ()
-        maybeDelete i = when V.elem (ifaceName (Proxy :: Proxy i)) ifaces $
+        maybeDelete i = when (V.elem (ifaceName (Proxy :: Proxy i)) ifaces) $
                          assign i Nothing
 
 changeDrive :: Drive -> String -> PropertyMap -> FillM Drive

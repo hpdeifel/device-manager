@@ -68,7 +68,7 @@ renderDeviceList list = Widget Fixed Greedy $ do
 -- between two columns.
 hFix :: Int -> Widget -> Widget
 hFix width = (<+> txt " ") -- Add space for column separation
-           . hLimit (width-1) -- Limit original widget to (width-1) chars
+           . hLimit (positive $ width-1) -- Limit original widget to (width-1) chars
            . padRight Max -- Expand original widget infinitly to the right
 
 nameColumn :: Device -> Text

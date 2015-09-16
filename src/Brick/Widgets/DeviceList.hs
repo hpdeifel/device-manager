@@ -76,7 +76,7 @@ nameColumn dev
   | devMediaType dev `elem` knownSizeDevices
     = formatType dev <> pad (optionally (devName dev))
   | otherwise
-    = padR (formatType dev) <> formatSize dev <> pad (optionally (devName dev))
+    = padR (formatSize dev) <> formatType dev <> pad (optionally (devName dev))
 
   where knownSizeDevices =
            [ OpticalCd
@@ -113,15 +113,20 @@ formatType dev = case devMediaType dev of
   OpticalBd -> "Blu-ray"
   OpticalBdR -> "Blu-ray" -- TODO Better name
   OpticalBdRe -> "Blu-ray" -- TODO Better name
-  _ -> ""
+  _ -> "Volume"
 
 si :: Word64 -> Text
-si size = T.pack $ printf "%.1f %s" fitSize fitUnit
+si size = T.pack $ printf "%.*f %s" (precision fitSize) fitSize fitUnit
   where sizes = iterate (/1000.0) (fromIntegral size) :: [Double]
         units = ["B", "kB", "MB", "GB", "TB"] :: [String]
         both  = zip sizes units
 
         (fitSize, fitUnit) = fromMaybe (last both) $ find ((<1000.0) . fst) both
+
+        precision :: Double -> Int
+        precision s  -- Show one digit after decimal point if (<10)
+          | s < 10    = 1
+          | otherwise = 0
 
 optionally :: Text -> Text
 optionally t

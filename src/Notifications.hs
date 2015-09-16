@@ -42,7 +42,9 @@ main :: IO ()
 main = do
   client <- DBus.connectSession
 
-  (con, devs) <- connect >>= \case
+  let config = ConConfig { configIncludeInternal = True }
+
+  (con, devs) <- connect config >>= \case
     Left err -> error (show err)
     Right x -> return x
 

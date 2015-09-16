@@ -98,7 +98,9 @@ theme = attrMap defAttr
 
 main :: IO ()
 main = do
-  (con,devs) <- connect >>= \case
+  let config = ConConfig { configIncludeInternal = False }
+
+  (con,devs) <- connect config >>= \case
     Left err -> do
       T.hPutStrLn stderr err
       exitWith (ExitFailure 1)

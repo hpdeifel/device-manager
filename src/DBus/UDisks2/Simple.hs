@@ -8,6 +8,7 @@ module DBus.UDisks2.Simple
        , Event(..)
        , Connection
        , Media(..)
+       , ConConfig(..)
        , connect
        , disconnect
        , withConnection
@@ -65,14 +66,22 @@ type ObjectMap = Map U.ObjectId U.Object
 data Connection = Connection {
   conUDisks :: U.Connection,
   conDevices :: TMVar (Map U.ObjectId Device),
-  conObjMap :: TMVar ObjectMap
+  conObjMap :: TMVar ObjectMap,
+  conConfig :: ConConfig
 }
 
-connect :: IO (Either Text (Connection, [Device]))
-connect = U.connect >>= \case
+data ConConfig = ConConfig {
+  -- | Wether to generate events for (and return) internal devices
+  -- (non-removable ones).
+  configIncludeInternal :: Bool
+}
+
+connect :: ConConfig -> IO (Either Text (Connection, [Device]))
+connect config = U.connect >>= \case
   Left e -> return $ Left e
   Right (udisks, objMap) -> do
-    let objects = M.mapMaybeWithKey (convertDevice objMap) objMap
+    let objects = M.mapMaybeWithKey (convertDevice internals objMap) objMap
+        internals = configIncludeInternal config
 
     var <- newTMVarIO objects
     objMapVar <- newTMVarIO objMap
@@ -81,6 +90,7 @@ connect = U.connect >>= \case
           { conUDisks = udisks
           , conDevices = var
           , conObjMap = objMapVar
+          , conConfig = config
           }
 
     return $ Right (con, M.elems objects)
@@ -90,9 +100,9 @@ disconnect con = do
   void $ atomically $ takeTMVar (conDevices con)
   U.disconnect (conUDisks con)
 
-withConnection :: ((Connection, [Device]) -> IO a)
+withConnection :: ConConfig -> ((Connection, [Device]) -> IO a)
                -> IO (Either Text a)
-withConnection body = bracket connect (traverse $ disconnect . fst)
+withConnection config body = bracket (connect config) (traverse $ disconnect . fst)
   (traverse body)
 
 nextEvent :: Connection -> IO Event
@@ -101,7 +111,7 @@ nextEvent con = loop
           U.ObjectAdded objId obj -> do
             objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
             devs <- takeTMVar (conDevices con)
-            let newDev = convertDevice objMap objId obj
+            let newDev = convertDevice internals objMap objId obj
             putTMVar (conDevices con) $
               M.alter (const newDev) objId devs
             return $ DeviceAdded <$> newDev
@@ -116,7 +126,7 @@ nextEvent con = loop
           U.ObjectChanged objId obj -> do
             objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
             devs <- takeTMVar (conDevices con)
-            let newDev = convertDevice objMap objId obj
+            let newDev = convertDevice internals objMap objId obj
             case M.lookup objId devs of
               Nothing -> do
                 putTMVar (conDevices con) $
@@ -132,6 +142,8 @@ nextEvent con = loop
         loop = atomically innerLoop >>= \case
           Nothing -> loop
           Just res -> return res
+
+        internals = configIncludeInternal $ conConfig con
 
 -- Operations
 mount :: Connection -> Device -> IO (Either Text MountPoint)
@@ -150,9 +162,11 @@ unmount con dev = do
                        U.fsUnmount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support unmounting"
 
-convertDevice :: ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
-convertDevice objMap objId (U.BlockDevObject obj)
-  | boring objMap obj  = Nothing
+type IncludeInternal = Bool
+
+convertDevice :: IncludeInternal -> ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
+convertDevice internals objMap objId (U.BlockDevObject obj)
+  | boring internals objMap obj  = Nothing
   | otherwise          = Just Device
      { devId = objId
      , devMountPoints = fromMaybe V.empty $
@@ -164,15 +178,12 @@ convertDevice objMap objId (U.BlockDevObject obj)
                           ^? _Just . U.driveDrive . U.driveIMedia
                           ^. to (fromMaybe U.NoMedia)
      }
-convertDevice _ _ _ = Nothing
+convertDevice _ _ _ _ = Nothing
 
-boring :: ObjectMap -> U.BlockDevice -> Bool
-boring objMap dev = or
-  [ dev ^. U.blockDevFS & isn't _Just
-  , dev ^. U.blockDevBlock . U.blockHintSystem
-  , dev ^. U.blockDevBlock . U.blockHintIgnore
-  , not removable
-  ]
+boring :: IncludeInternal -> ObjectMap -> U.BlockDevice -> Bool
+boring internals objMap dev = (dev ^. U.blockDevFS & isn't _Just)
+                           || dev ^. U.blockDevBlock . U.blockHintIgnore
+                           || (not internals && not removable)
 
   where removable = dev ^. U.blockDevBlock . blockDrive' objMap
                         ^? _Just . U.driveDrive . U.driveIRemovable

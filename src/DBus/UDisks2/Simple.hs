@@ -14,6 +14,9 @@ module DBus.UDisks2.Simple
        , withConnection
        , nextEvent
 
+       , getConfig
+       , setConfig
+
        , mount
        , unmount
        ) where
@@ -67,7 +70,7 @@ data Connection = Connection {
   conUDisks :: U.Connection,
   conDevices :: TMVar (Map U.ObjectId Device),
   conObjMap :: TMVar ObjectMap,
-  conConfig :: ConConfig
+  conConfig :: TMVar ConConfig
 }
 
 data ConConfig = ConConfig {
@@ -80,17 +83,18 @@ connect :: ConConfig -> IO (Either Text (Connection, [Device]))
 connect config = U.connect >>= \case
   Left e -> return $ Left e
   Right (udisks, objMap) -> do
-    let objects = M.mapMaybeWithKey (convertDevice internals objMap) objMap
+    let objects = extractInteresting internals objMap
         internals = configIncludeInternal config
 
     var <- newTMVarIO objects
     objMapVar <- newTMVarIO objMap
+    confVar <- newTMVarIO config
 
     let con = Connection
           { conUDisks = udisks
           , conDevices = var
           , conObjMap = objMapVar
-          , conConfig = config
+          , conConfig = confVar
           }
 
     return $ Right (con, M.elems objects)
@@ -109,23 +113,20 @@ nextEvent :: Connection -> IO Event
 nextEvent con = loop
   where innerLoop = U.nextEvent (conUDisks con) >>= \case
           U.ObjectAdded objId obj -> do
-            objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
-            devs <- takeTMVar (conDevices con)
+            (objMap, devs, internals) <- modifyObjMap $ M.insert objId obj
             let newDev = convertDevice internals objMap objId obj
             putTMVar (conDevices con) $
               M.alter (const newDev) objId devs
             return $ DeviceAdded <$> newDev
 
           U.ObjectRemoved objId -> do
-            void $ modifyTMVar (conObjMap con) $ M.delete objId
-            devs <- takeTMVar (conDevices con)
+            (_, devs, _) <- modifyObjMap $ M.delete objId
             putTMVar (conDevices con) $ M.delete objId devs
             for (M.lookup objId devs)  $ \obj ->
               return $ DeviceRemoved obj
 
           U.ObjectChanged objId obj -> do
-            objMap <- modifyTMVar (conObjMap con) $ M.insert objId obj
-            devs <- takeTMVar (conDevices con)
+            (objMap, devs, internals) <- modifyObjMap $ M.insert objId obj
             let newDev = convertDevice internals objMap objId obj
             case M.lookup objId devs of
               Nothing -> do
@@ -143,7 +144,37 @@ nextEvent con = loop
           Nothing -> loop
           Just res -> return res
 
-        internals = configIncludeInternal $ conConfig con
+        modifyObjMap :: (ObjectMap -> ObjectMap) -> STM (ObjectMap, Map U.ObjectId Device,Bool)
+        modifyObjMap f = do
+          objMap <- modifyTMVar (conObjMap con) f
+          devs <- takeTMVar (conDevices con)
+          internals <- configIncludeInternal <$> readTMVar (conConfig con)
+          return (objMap, devs, internals)
+
+-- Config modification
+getConfig :: Connection -> IO ConConfig
+getConfig = atomically . readTMVar . conConfig
+
+-- | Set the new config and return list of devices that would be
+-- generated with this new config.
+setConfig :: Connection -> ConConfig -> IO [Device]
+setConfig con config = atomically $ do
+  oldConfig <- swapTMVar (conConfig con) config
+  devs <- takeTMVar (conDevices con)
+  objMap <- readTMVar (conObjMap con)
+
+  -- The 'boring'-status of devices could have changed. Thus reevalutate the
+  -- boringness of all objects.
+
+  -- NOTE This looks at all devices even if the boringness _cannot_ have changed
+  -- (for example if the new config is the same as the old). An optimization
+  -- would be to check for such conditions. Please optimize only if necessary.
+  let newDevs = extractInteresting (configIncludeInternal config) objMap
+
+  putTMVar (conDevices con) newDevs
+
+  return $ M.elems newDevs
+
 
 -- Operations
 mount :: Connection -> Device -> IO (Either Text MountPoint)
@@ -163,6 +194,10 @@ unmount con dev = do
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support unmounting"
 
 type IncludeInternal = Bool
+
+-- | Extracts all interesting devices from the map
+extractInteresting :: IncludeInternal -> ObjectMap -> [Device]
+extractInteresting internals = M.mapMaybeWithKey (convertDevice internals objMap)
 
 convertDevice :: IncludeInternal -> ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
 convertDevice internals objMap objId (U.BlockDevObject obj)

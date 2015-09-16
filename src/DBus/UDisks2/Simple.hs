@@ -87,7 +87,7 @@ connect = U.connect >>= \case
 
 disconnect :: Connection -> IO ()
 disconnect con = do
-  atomically $ takeTMVar (conDevices con)
+  void $ atomically $ takeTMVar (conDevices con)
   U.disconnect (conUDisks con)
 
 withConnection :: ((Connection, [Device]) -> IO a)

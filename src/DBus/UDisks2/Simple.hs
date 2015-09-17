@@ -159,8 +159,7 @@ getConfig = atomically . readTMVar . conConfig
 -- generated with this new config.
 setConfig :: Connection -> ConConfig -> IO [Device]
 setConfig con config = atomically $ do
-  oldConfig <- swapTMVar (conConfig con) config
-  devs <- takeTMVar (conDevices con)
+  void $ swapTMVar (conConfig con) config
   objMap <- readTMVar (conObjMap con)
 
   -- The 'boring'-status of devices could have changed. Thus reevalutate the
@@ -171,7 +170,7 @@ setConfig con config = atomically $ do
   -- would be to check for such conditions. Please optimize only if necessary.
   let newDevs = extractInteresting (configIncludeInternal config) objMap
 
-  putTMVar (conDevices con) newDevs
+  void $ swapTMVar (conDevices con) newDevs
 
   return $ M.elems newDevs
 

@@ -14,6 +14,7 @@ import DBus.UDisks2.Simple
 
 import qualified Data.Text.IO as T
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import Data.Text (Text)
 import System.Exit
 import System.IO
@@ -48,7 +49,10 @@ helpMsg = KeyBindings
      , ("G, End", "Select last device")
      ])
   , ("Device operations",
-     [ ("RET", "Mount or unmount device")])]
+     [ ("RET", "Mount or unmount device")])
+  , ("Display settings",
+     [ ("t", "Toggle display of system devices") ])
+  ]
 
 draw :: AppState -> [Widget]
 draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
@@ -83,6 +87,10 @@ handler appState@AppState{..} e = case e of
 
         handleListKey (EvKey KEnter []) as =
           liftIO (mountUnmount as) >>= continue
+
+        handleListKey (EvKey (KChar 't') []) as = do
+          liftIO (toggleSystemDevices as) >>= continue
+
         handleListKey e as = do
           lst' <- handleHJKLEvent e devList
           continue $ as { devList = lst' }
@@ -138,6 +146,14 @@ mountUnmount as@AppState{..} = case listSelectedElement devList of
     | otherwise       -> mount connection dev >>= \case
         Left err -> return $ showMessage as $ "error: " <> err
         Right mp -> return $ showMessage as $ "Device mounted at " <> mp
+
+
+toggleSystemDevices :: AppState -> IO AppState
+toggleSystemDevices as = do
+  newDevList <- modifyConfig (connection as) $ \con ->
+    con { configIncludeInternal = not $ configIncludeInternal con }
+
+  return $ onList (listSimpleReplace $ V.fromList newDevList) as
 
 showMessage :: AppState -> Text -> AppState
 showMessage as msg = as { message = msg }

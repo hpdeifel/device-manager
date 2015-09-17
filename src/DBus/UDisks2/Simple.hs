@@ -16,6 +16,7 @@ module DBus.UDisks2.Simple
 
        , getConfig
        , setConfig
+       , modifyConfig
 
        , mount
        , unmount
@@ -158,8 +159,11 @@ getConfig = atomically . readTMVar . conConfig
 -- | Set the new config and return list of devices that would be
 -- generated with this new config.
 setConfig :: Connection -> ConConfig -> IO [Device]
-setConfig con config = atomically $ do
-  void $ swapTMVar (conConfig con) config
+setConfig con config = modifyConfig con (const config)
+
+modifyConfig :: Connection -> (ConConfig -> ConConfig) -> IO [Device]
+modifyConfig con f = atomically $ do
+  config <- modifyTMVar (conConfig con) f
   objMap <- readTMVar (conObjMap con)
 
   -- The 'boring'-status of devices could have changed. Thus reevalutate the

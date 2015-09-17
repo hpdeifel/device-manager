@@ -88,13 +88,13 @@ connect config = U.connect >>= \case
 
     var <- newTMVarIO objects
     objMapVar <- newTMVarIO objMap
-    confVar <- newTMVarIO config
+    configVar <- newTMVarIO config
 
     let con = Connection
           { conUDisks = udisks
           , conDevices = var
           , conObjMap = objMapVar
-          , conConfig = confVar
+          , conConfig = configVar
           }
 
     return $ Right (con, M.elems objects)
@@ -196,8 +196,8 @@ unmount con dev = do
 type IncludeInternal = Bool
 
 -- | Extracts all interesting devices from the map
-extractInteresting :: IncludeInternal -> ObjectMap -> [Device]
-extractInteresting internals = M.mapMaybeWithKey (convertDevice internals objMap)
+extractInteresting :: IncludeInternal -> ObjectMap -> Map U.ObjectId Device
+extractInteresting internals objMap = M.mapMaybeWithKey (convertDevice internals objMap) objMap
 
 convertDevice :: IncludeInternal -> ObjectMap -> U.ObjectId -> U.Object -> Maybe Device
 convertDevice internals objMap objId (U.BlockDevObject obj)

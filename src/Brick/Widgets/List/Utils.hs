@@ -6,6 +6,7 @@ import Brick.Widgets.List
 import Control.Lens
 import qualified Data.Vector as V
 import Data.Maybe
+import Control.Monad
 
 listAppend :: e -> List e -> List e
 listAppend e l = listInsert (l^.listElementsL.to V.length) e l
@@ -38,5 +39,8 @@ handleHJKLEvent ev lst = case ev of
 -- the `merge` function.
 listSimpleReplace :: Eq e => V.Vector e -> List e -> List e
 listSimpleReplace elems oldList =
-  let selected = (fromMaybe 0 . flip V.elemIndex elems . snd) <$> listSelectedElement oldList
-  in oldList & listElementsL .~ elems & listSelectedL .~ selected
+  let selected = flip V.elemIndex elems . snd =<< listSelectedElement oldList
+      newSelected = if V.null elems
+                       then Nothing
+                       else Just $ fromMaybe 0 selected
+  in oldList & listElementsL .~ elems & listSelectedL .~ newSelected

@@ -15,6 +15,7 @@ import Data.Monoid
 import Control.Exception.Base
 import System.Process
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Text (Text)
 import System.IO
 
@@ -111,9 +112,11 @@ actionCallback con var sig = do
   let dev = M.lookup iD idM
 
   flip (maybe (return ())) dev $ \d -> case action of
-      "mount" -> void $ mount con d
+      "mount" -> mount con d >>= \case
+        Left err -> logError err
+        Right _  -> return ()
       "open"  -> mount con d >>= \case
-        Left _ -> return () -- TODO Log error
+        Left err -> logError err
         Right mountPoint  -> void $ forkIO $ doOpen mountPoint
       _       -> return ()
 
@@ -140,3 +143,6 @@ notify client title body actions = do
   case iD of
     Left err -> hPrint stderr err >> return Nothing
     Right iD' -> return $ Just $ fromVariant' iD'
+
+logError :: Text -> IO ()
+logError err = T.hPutStrLn stderr err

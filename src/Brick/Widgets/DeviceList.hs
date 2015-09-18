@@ -30,8 +30,8 @@ newDeviceList name devs = list name (V.fromList devs) itemHeight
   where itemHeight = 1
 
 renderDeviceList :: List Device -> Widget
-renderDeviceList list = Widget Fixed Greedy $ do
-  let devs = listElements list
+renderDeviceList lst = Widget Fixed Greedy $ do
+  let devs = listElements lst
 
   c <- getContext
 
@@ -62,7 +62,7 @@ renderDeviceList list = Widget Fixed Greedy $ do
              <+> hFix fileWidth (txt "File")
              <+> hFix mountPointWidth (txt "Mount Point")
 
-  render $ renderHeader <=> hBorder <=> renderList list renderRow
+  render $ renderHeader <=> hBorder <=> renderList lst renderRow
 
 -- We substract 1 from the width, to guarantee at least one character of space
 -- between two columns.
@@ -119,9 +119,9 @@ si :: Word64 -> Text
 si size = T.pack $ printf "%.*f %s" (precision fitSize) fitSize fitUnit
   where sizes = iterate (/1000.0) (fromIntegral size) :: [Double]
         units = ["B", "kB", "MB", "GB", "TB"] :: [String]
-        both  = zip sizes units
+        sizeWithUnits  = zip sizes units
 
-        (fitSize, fitUnit) = fromMaybe (last both) $ find ((<1000.0) . fst) both
+        (fitSize, fitUnit) = fromMaybe (last sizeWithUnits) $ find ((<1000.0) . fst) sizeWithUnits
 
         precision :: Double -> Int
         precision s  -- Show one digit after decimal point if (<10)
@@ -179,7 +179,3 @@ expand total elems = elems'
         elems' = zipWith (+)
                   (replicate remaining 1 ++ repeat 0)
                   (replicate num part)
-
-toZero :: Int -> [Int]
-toZero 0 = repeat 0
-toZero n = n : toZero (n-1)

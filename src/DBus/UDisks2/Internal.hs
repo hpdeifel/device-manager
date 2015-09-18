@@ -21,13 +21,10 @@ import qualified Data.ByteString as B
 import qualified Data.Text.Encoding as T
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import Data.Word
 import Data.Map (Map)
 import Data.Monoid
 import Data.Proxy
 import Data.List (isPrefixOf)
-import Data.String
-import Data.Int
 import Data.Maybe
 
 
@@ -37,7 +34,6 @@ import DBus.Client (Client)
 
 import Control.Concurrent.STM
 
-import Control.Lens.TH
 import Control.Lens (assign, Lens', ASetter, use, (^.))
 
 -- Types
@@ -84,7 +80,7 @@ connect = runExceptT $ do
 
 disconnect :: Connection -> IO ()
 disconnect con = do
-  atomically $ takeTMVar (conObjectMap con)
+  void $ atomically $ takeTMVar (conObjectMap con)
   DBus.removeMatch (conClient con) (conSigHandler con)
   DBus.disconnect $ conClient con
 
@@ -101,12 +97,12 @@ connectSignals :: Client -> TMVar ObjectMap -> TQueue Event
 connectSignals client var queue = do
 
   -- The InterfacesAdded signal
-  DBus.addMatch client matchAdded $ \sig -> do
+  void $ DBus.addMatch client matchAdded $ \sig -> do
     let [path, props] = DBus.signalBody sig
     handleAdded var queue (fromVariant' path) (fromVariant' props)
 
   -- The InterfacesRemoved signal
-  DBus.addMatch client matchRemoved $ \sig -> do
+  void $ DBus.addMatch client matchRemoved $ \sig -> do
     let [path, props] = DBus.signalBody sig
     handleDeleted var queue (fromVariant' path) (fromVariant' props)
 
@@ -159,7 +155,7 @@ handleAdded objMapVar events path ifaces = atomically $ do
 
     -- Object present, modify it
     Just oldObj -> case runExcept $ addInterfaces oldObj ifaces of
-      Left e -> return objMap -- TODO Handle error (maybe log it)
+      Left _ -> return objMap -- TODO Handle error (maybe log it)
       Right newObj -> do
         writeTQueue events $ ObjectChanged objId newObj
         return $ M.insert objId newObj objMap

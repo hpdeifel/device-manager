@@ -8,15 +8,12 @@ import qualified DBus.Client as DBus
 import Control.Concurrent
 import Control.Monad
 import qualified Data.Map as M
-import Data.Maybe (isJust, fromJust)
 import Data.Word (Word32)
 import Data.Int (Int32)
 import Data.List
 import Data.Monoid
-import Data.Vector ((!?))
 import Control.Exception.Base
 import System.Process
-import qualified Data.Text.IO as T
 import qualified Data.Text as T
 import Data.Text (Text)
 import System.IO
@@ -48,8 +45,6 @@ main = do
     Left err -> error (show err)
     Right x -> return x
 
-  chan <- newChan
-
   var <- newMVar (Data devs M.empty)
 
   void $ DBus.addMatch client (matchSignal (Notify client) "NotificationClosed")
@@ -58,8 +53,12 @@ main = do
   void $ DBus.addMatch client (matchSignal (Notify client) "ActionInvoked")
     (actionCallback con var)
 
-  flip finally (DBus.disconnect client >> disconnect con) $
-    forever $ do
+  forever (handleEvents client con var)
+    `finally`
+    (DBus.disconnect client >> disconnect con)
+
+handleEvents :: DBus.Client -> Connection -> MVar NoteData -> IO ()
+handleEvents client con var = do
       event <- nextEvent con
       case event of
         DeviceAdded d -> do
@@ -114,7 +113,7 @@ actionCallback con var sig = do
   flip (maybe (return ())) dev $ \d -> case action of
       "mount" -> void $ mount con d
       "open"  -> mount con d >>= \case
-        Left err -> return () -- TODO Log error
+        Left _ -> return () -- TODO Log error
         Right mountPoint  -> void $ forkIO $ doOpen mountPoint
       _       -> return ()
 

@@ -5,7 +5,6 @@ module Main where
 import Brick
 import Brick.Widgets.DeviceList
 import Brick.Widgets.Border
-import Brick.Widgets.Dialog
 import Brick.Widgets.HelpMessage
 import Graphics.Vty hiding (Event, nextEvent)
 import qualified Graphics.Vty as Vty
@@ -13,14 +12,12 @@ import qualified Graphics.Vty as Vty
 import DBus.UDisks2.Simple
 
 import qualified Data.Text.IO as T
-import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.Text (Text)
 import System.Exit
 import System.IO
 import Control.Monad
 import Control.Concurrent
-import Control.Concurrent.Chan
 import Data.Default
 import Data.Monoid
 import Control.Monad.IO.Class
@@ -81,9 +78,9 @@ handler appState@AppState{..} e = case e of
         handleKey (EvKey (KChar '?') []) as = do
           resetHelpWidget -- scroll to the beginning
           continue (showHelp as)
-        handleKey e as = case shownHelp of
-          Nothing -> handleListKey e as
-          Just b  -> handleDialogKey b e as
+        handleKey ev as = case shownHelp of
+          Nothing -> handleListKey ev as
+          Just b  -> handleDialogKey b ev as
 
         handleListKey (EvKey KEnter []) as =
           liftIO (mountUnmount as) >>= continue
@@ -91,12 +88,12 @@ handler appState@AppState{..} e = case e of
         handleListKey (EvKey (KChar 't') []) as = do
           liftIO (toggleSystemDevices as) >>= continue
 
-        handleListKey e as = do
-          lst' <- handleHJKLEvent e devList
+        handleListKey ev as = do
+          lst' <- handleHJKLEvent ev devList
           continue $ as { devList = lst' }
 
         handleDialogKey _ (EvKey KEsc []) as = continue (hideHelp as)
-        handleDialogKey b e as = void (handleEvent e b) >> continue as
+        handleDialogKey b ev as = void (handleEvent ev b) >> continue as
 
 theme :: AttrMap
 theme = attrMap defAttr
@@ -126,7 +123,7 @@ main = do
 
   eventChan <- newChan
 
-  forkIO $ eventThread con eventChan
+  void $ forkIO $ eventThread con eventChan
 
   void $ customMain (mkVty def) eventChan app $
     AppState devList "Welcome! Press '?' to get help." Nothing con

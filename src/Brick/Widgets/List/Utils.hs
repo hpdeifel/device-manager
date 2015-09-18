@@ -6,7 +6,6 @@ import Brick.Widgets.List
 import Control.Lens
 import qualified Data.Vector as V
 import Data.Maybe
-import Control.Monad
 
 listAppend :: e -> List e -> List e
 listAppend e l = listInsert (l^.listElementsL.to V.length) e l

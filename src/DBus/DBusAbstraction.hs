@@ -26,14 +26,8 @@ import DBus
 import DBus.Client
 import DBus.Introspection hiding (Signal)
 
-import Control.Monad
-
 import Data.Map (Map)
-import qualified Data.Map as M
 import Data.Maybe
-import Data.List
-import Data.Unique
-import Data.IORef
 
 import Control.Exception
 

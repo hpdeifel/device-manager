@@ -62,6 +62,7 @@ instance HandleEvent KeyBindings where
     KEnd      -> vScrollToEnd scroller >> return b
     KPageUp   -> vScrollPage scroller Up >> return b
     KPageDown -> vScrollPage scroller Down >> return b
+    _         -> return b
 
   handleEvent _ b = return b
 

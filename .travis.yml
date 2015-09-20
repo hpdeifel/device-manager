@@ -15,7 +15,7 @@ before_install:
 
 script:
 - stack --no-terminal setup
-- stack --no-terminal build
+- stack --no-terminal test
 
 cache:
   directories:

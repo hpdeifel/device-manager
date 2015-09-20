@@ -30,6 +30,7 @@ import qualified DBus.UDisks2.Operations as U
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
@@ -184,7 +185,7 @@ mount :: Connection -> Device -> IO (Either Text MountPoint)
 mount con dev = do
   objMap <- atomically $ readTMVar (conObjMap con)
   case objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join of
-    Just fileSystem -> U.runOperation (conUDisks con) $
+    Just fileSystem -> fmap (mapLeft beautifyError) $ U.runOperation (conUDisks con) $
                        U.fsMount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support mounting"
 
@@ -192,9 +193,18 @@ unmount :: Connection -> Device -> IO (Either Text ())
 unmount con dev = do
   objMap <- atomically $ readTMVar (conObjMap con)
   case objMap ^. at (devId dev) ^? _Just . U._BlockDevObject . U.blockDevFS ^. to join of
-    Just fileSystem -> U.runOperation (conUDisks con) $
+    Just fileSystem -> fmap (mapLeft beautifyError) $ U.runOperation (conUDisks con) $
                        U.fsUnmount fileSystem M.empty
     Nothing -> return $ Left $ "Device " <> devName dev <> " doesn't support unmounting"
+
+beautifyError :: U.Error -> Text
+beautifyError err = case U.errType err of
+  U.ErrorNotAuthorizedCanObtain -> U.errMessage err <> ". Do you have a polkit authentication agent running?"
+  t -> (T.pack $ show t) <> " " <> U.errMessage err
+
+mapLeft :: (a -> c) -> Either a b -> Either c b
+mapLeft f (Left x) = Left (f x)
+mapLeft _ (Right x) = Right x
 
 type IncludeInternal = Bool
 

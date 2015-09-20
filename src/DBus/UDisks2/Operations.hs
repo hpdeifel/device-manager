@@ -28,9 +28,9 @@ import DBus.DBusAbstraction (DBusInterface(..),DBusObject(..), Implements)
 
 -- Contains available operations (dbus methods) for every supported interface.
 
-type Operation = ExceptT Text (ReaderT Connection IO)
+type Operation = ExceptT Error (ReaderT Connection IO)
 
-runOperation :: Connection -> Operation a -> IO (Either Text a)
+runOperation :: Connection -> Operation a -> IO (Either Error a)
 runOperation con = flip runReaderT con . runExceptT
 
 ----------------------------------------------------------------------
@@ -162,7 +162,7 @@ invoke :: (DBus.SaneDBusObject o, DBus.IsVariant a)
 invoke obj member args = do
   client <- asks conClient
   liftIO (DBus.invoke client obj member args) >>= \case
-    Left err -> throwError $ formatMethodError err
+    Left err -> throwError $ udisksError err
     Right res -> return $ DBus.fromVariant' res
 
 -- NOTE: This is a hack to allow methods without return values to work. It
@@ -173,7 +173,7 @@ instance DBus.IsVariant () where
   fromVariant _ = Just ()
 
 
-formatMethodError :: DBus.MethodError -> Text
-formatMethodError err = case DBus.methodErrorBody err of
-  [] -> T.pack $ DBus.formatErrorName $ DBus.methodErrorName err
-  (msg:_) -> DBus.fromVariant' msg
+-- formatMethodError :: DBus.MethodError -> Text
+-- formatMethodError err = case DBus.methodErrorBody err of
+--   [] -> T.pack $ DBus.formatErrorName $ DBus.methodErrorName err
+--   (msg:_) -> DBus.fromVariant' msg

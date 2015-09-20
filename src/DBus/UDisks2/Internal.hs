@@ -780,3 +780,30 @@ infix 3 <~?
 a <~? b = b >>= \case
   Just x  -> assign a x
   Nothing -> return ()
+
+
+-- Error Things
+udisksError :: DBus.MethodError -> Error
+udisksError err = Error errorType (T.pack $ DBus.methodErrorMessage err)
+  where errorType = parseErrorType (DBus.methodErrorName err)
+
+parseErrorType :: DBus.ErrorName -> ErrorType
+parseErrorType name = case T.stripPrefix "org.freedesktop.UDisks2.Error." textName of
+  Just "Failed" -> ErrorFailed
+  Just "Cancelled" -> ErrorCancelled
+  Just "AlreadyCancelled" -> ErrorAlreadyCancelled
+  Just "NotAuthorized" -> ErrorNotAuthorized
+  Just "NotAuthorizedCanObtain" -> ErrorNotAuthorizedCanObtain
+  Just "NotAuthorizedDismissed" -> ErrorNotAuthorizedDismissed
+  Just "AlreadyMounted" -> ErrorAlreadyMounted
+  Just "NotMounted" -> ErrorNotMounted
+  Just "OptionNotPermitted" -> ErrorOptionNotPermitted
+  Just "MountedByOtherUser" -> ErrorMountedByOtherUser
+  Just "AlreadyUnmounting" -> ErrorAlreadyUnmounting
+  Just "NotSupported" -> ErrorNotSupported
+  Just "TimedOut" -> ErrorTimedOut
+  Just "WouldWakeup" -> ErrorWouldWakeup
+  Just "DeviceBusy" -> ErrorDeviceBusy
+  _ -> ErrorOther textName
+
+  where textName = T.pack $ DBus.formatErrorName name

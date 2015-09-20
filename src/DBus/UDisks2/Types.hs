@@ -226,3 +226,32 @@ data Object = BlockDevObject BlockDevice
             deriving (Show)
 
 makePrisms ''Object
+
+
+data ErrorType = ErrorFailed
+               | ErrorCancelled
+               | ErrorAlreadyCancelled
+               | ErrorNotAuthorized
+               | ErrorNotAuthorizedCanObtain
+               | ErrorNotAuthorizedDismissed
+               | ErrorAlreadyMounted
+               | ErrorNotMounted
+               | ErrorOptionNotPermitted
+               | ErrorMountedByOtherUser
+               | ErrorAlreadyUnmounting
+               | ErrorNotSupported
+               | ErrorTimedOut
+               | ErrorWouldWakeup
+               | ErrorDeviceBusy
+               | ErrorOther Text
+
+               deriving (Show, Eq)
+
+makePrisms ''ErrorType
+
+type ErrorMessage = Text
+
+data Error = Error {
+  errType :: ErrorType,
+  errMessage :: ErrorMessage
+} deriving (Show, Eq)

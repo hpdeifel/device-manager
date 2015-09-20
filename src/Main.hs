@@ -97,7 +97,7 @@ handler appState@AppState{..} e = case e of
 
 theme :: AttrMap
 theme = attrMap defAttr
-  [ (listSelectedAttr, defAttr `withBackColor` brightBlack)
+  [ (listSelectedAttr, black `on` white)
   , (helpAttr <> "title", fg green)
   ]
 

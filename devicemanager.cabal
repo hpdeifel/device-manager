@@ -56,3 +56,7 @@ Executable devnotify
                        stm ==2.4.*,
                        mtl ==2.2.*
   Hs-Source-Dirs:      src
+
+source-repository head
+  type:                git
+  location:            https://github.com/rootzlevel/device-manager

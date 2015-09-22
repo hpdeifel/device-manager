@@ -7,7 +7,7 @@ Author:              Hans-Peter Deifel <hpdeifel@gmx.de>
 Maintainer:          Hans-Peter Deifel <hpdeifel@gmx.de>
 Category:            System
 Build-Type:          Simple
-Cabal-Version:       >=1.8
+Cabal-Version:       >=1.10
 
 library
   hs-source-dirs:      lib
@@ -27,6 +27,7 @@ library
                      , lens ==4.12.*
                      , stm ==2.4.*
                      , mtl ==2.2.*
+  default-language:    Haskell2010
 
                      
 Executable devman
@@ -43,8 +44,11 @@ Executable devman
                        lens ==4.12.*,
                        brick ==0.2.*,
                        vty ==5.4.*,
-                       data-default ==0.5.*
+                       data-default ==0.5.*,
+                       unix ==2.7.*,
+                       process >=1.1 && <1.3
   Ghc-Options:         -threaded
+  default-language:    Haskell2010
   Hs-Source-Dirs:      src
 
 Executable devnotify
@@ -55,6 +59,7 @@ Executable devnotify
                        containers ==0.5.*,
                        process >=1.1 && <1.3,
                        text >=0.11 && <1.3
+  default-language:    Haskell2010
   Hs-Source-Dirs:      src
 
 test-suite devicemanager-tests

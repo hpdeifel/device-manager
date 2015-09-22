@@ -182,6 +182,8 @@ openShell dev as = case devMountPoints dev V.!? 0 of
       Just err -> showMessage as (T.pack err)
 
       where callShell sh = do
+              T.putStrLn ("\nRunning shell in " <> directory)
+              T.putStrLn "Use Ctrl+D or 'exit' to return to device list."
               (_,_,_,h) <- createProcess
                            (proc sh []) { cwd = Just (T.unpack directory)
                                         , delegate_ctlc = True

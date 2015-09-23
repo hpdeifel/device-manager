@@ -9,7 +9,7 @@ clone this repository:
 
 The following system-libraries have to be installed:
 
- - libxml-dev
+ - libxml2 (possibly in the -dev version)
 
 Use stack to download all Haskell dependencies, build the code and
 install the binaries to `~/.local/bin`:

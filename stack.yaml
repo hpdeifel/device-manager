@@ -7,7 +7,7 @@ packages:
 
 extra-deps:
   - vty-5.4.0
-  - brick-0.2
+  - brick-0.2.1
   - text-zipper-0.3.1
 
 resolver: lts-3.5

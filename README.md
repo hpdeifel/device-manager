@@ -7,8 +7,12 @@ clone this repository:
 
     git clone https://github.com/rootzlevel/device-manager.git
 
-Use stack to download all dependencies, build the code and install the
-binaries to `~/.local/bin`:
+The following system-libraries have to be installed:
+
+ - libxml-dev
+
+Use stack to download all Haskell dependencies, build the code and
+install the binaries to `~/.local/bin`:
 
     cd device-manager/
 	stack build --copy-bins

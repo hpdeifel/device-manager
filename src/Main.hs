@@ -7,6 +7,7 @@ import Brick
 import Brick.Widgets.DeviceList
 import Brick.Widgets.Border
 import Brick.Widgets.HelpMessage
+import Brick.Widgets.WrappedText
 import Graphics.Vty hiding (Event, nextEvent,(<|>))
 import qualified Graphics.Vty as Vty
 
@@ -66,7 +67,7 @@ draw :: AppState -> [Widget]
 draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
   where w =     renderDeviceList dl
             <=> hBorder
-            <=> txt msg
+            <=> wrappedText msg
 
         dia' = help <$> dia
 

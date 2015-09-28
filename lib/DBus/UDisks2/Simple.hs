@@ -200,7 +200,7 @@ unmount con dev = do
 beautifyError :: U.Error -> Text
 beautifyError err = case U.errType err of
   U.ErrorNotAuthorizedCanObtain -> U.errMessage err <> ". Do you have a polkit authentication agent running?"
-  t -> (T.pack $ show t) <> " " <> U.errMessage err
+  t -> U.errMessage err
 
 mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft f (Left x) = Left (f x)

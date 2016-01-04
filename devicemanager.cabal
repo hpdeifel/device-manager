@@ -44,7 +44,7 @@ Executable devman
                        containers ==0.5.*,
                        transformers ==0.4.*,
                        lens ==4.12.*,
-                       brick ==0.2.*,
+                       brick >=0.2 && <0.4,
                        vty ==5.4.*,
                        data-default ==0.5.*,
                        unix ==2.7.*,

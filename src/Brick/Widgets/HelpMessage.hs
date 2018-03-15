@@ -2,6 +2,7 @@
 module Brick.Widgets.HelpMessage
        ( Title
        , KeyBindings(..)
+       , handleKeyBindingsEvent 
        , help
        , helpAttr
        , resetHelpWidget
@@ -21,10 +22,10 @@ type Title = Text
 -- [(Title, [(Key, Description)])]
 newtype KeyBindings = KeyBindings [(Title, [(Text, Text)])]
 
-help :: KeyBindings -> Widget
+help :: KeyBindings -> Widget String
 help bindings = center $ helpWidget bindings
 
-center :: Widget -> Widget
+center :: Widget n -> Widget n
 center w = Widget Fixed Fixed $ do
   c <- getContext
   res <- render w
@@ -35,7 +36,7 @@ center w = Widget Fixed Fixed $ do
 
   render $ translateBy (Location (x,y)) $ raw (res^.imageL)
 
-helpWidget :: KeyBindings -> Widget
+helpWidget :: KeyBindings -> Widget String
 helpWidget (KeyBindings bindings) = Widget Fixed Fixed $ do
   c <- getContext
 
@@ -47,11 +48,11 @@ helpWidget (KeyBindings bindings) = Widget Fixed Fixed $ do
     vBox $ intersperse (txt " ") $
     map (uncurry section) bindings
 
-scroller :: ViewportScroll
+scroller :: ViewportScroll String
 scroller = viewportScroll "helpViewport"
 
-instance HandleEvent KeyBindings where
-  handleEvent (EvKey k _) b = case k of
+handleKeyBindingsEvent :: Event -> KeyBindings -> EventM String KeyBindings
+handleKeyBindingsEvent (EvKey k _) b = case k of
     KChar 'j' -> vScrollBy scroller 1 >> return b
     KDown     -> vScrollBy scroller 1 >> return b
     KChar 'k' -> vScrollBy scroller (-1) >> return b
@@ -63,20 +64,19 @@ instance HandleEvent KeyBindings where
     KPageUp   -> vScrollPage scroller Up >> return b
     KPageDown -> vScrollPage scroller Down >> return b
     _         -> return b
+handleKeyBindingsEvent  _ b = return b
 
-  handleEvent _ b = return b
 
-
-resetHelpWidget :: EventM ()
+resetHelpWidget :: EventM String ()
 resetHelpWidget = vScrollToBeginning scroller
 
-key :: Text -> Text -> Widget
+key :: Text -> Text -> Widget n
 key k h =  markup (("  " <> k) @? (helpAttr <> "key"))
        <+> padLeft Max (markup (h @? (helpAttr <> "description")))
 
 helpAttr :: AttrName
 helpAttr = "help"
 
-section :: Title -> [(Text, Text)] -> Widget
+section :: Title -> [(Text, Text)] -> Widget n
 section title keys =  markup ((title <> ":") @? (helpAttr <> "title"))
                   <=> vBox (map (uncurry key) keys)

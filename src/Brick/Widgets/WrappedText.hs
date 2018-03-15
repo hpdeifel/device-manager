@@ -8,7 +8,7 @@ import           Control.Lens
 import           Data.Text (Text)
 import qualified Data.Text as T
 
-wrappedText :: Text -> Widget
+wrappedText :: Text -> Widget n
 wrappedText theText = Widget Fixed Fixed $ do
   ctx <- getContext
   let newText = wrapLines (ctx^.availWidthL) theText

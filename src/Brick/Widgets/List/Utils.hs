@@ -7,26 +7,26 @@ import Control.Lens
 import qualified Data.Vector as V
 import Data.Maybe
 
-listAppend :: e -> List e -> List e
+listAppend :: e -> List n e -> List n e
 listAppend e l = listInsert (l^.listElementsL.to V.length) e l
 
-listRemoveEq :: Eq e => e -> List e -> List e
+listRemoveEq :: Eq e => e -> List n e -> List n e
 listRemoveEq e l = case l^.listElementsL.to (V.elemIndex e) of
   Nothing -> l
   Just i  -> listRemove i l
 
-listSwap :: Eq e => e -> e -> List e -> List e
+listSwap :: Eq e => e -> e -> List n e -> List n e
 listSwap old new l = case l^.listElementsL.to (V.elemIndex old) of
   Nothing -> listAppend new l
   Just i  -> listMoveTo i $ listInsert i new $ listRemove i l
 
-handleHJKLEvent :: Event -> List e -> EventM (List e)
+handleHJKLEvent :: Ord n => Event -> List n e -> EventM n (List n e)
 handleHJKLEvent ev lst = case ev of
   EvKey (KChar 'j') [] -> return $ listMoveDown lst
   EvKey (KChar 'k') [] -> return $ listMoveUp lst
   EvKey (KChar 'g') [] -> return $ listMoveTo 0 lst
   EvKey (KChar 'G') [] -> return $ listMoveTo (lst^.listElementsL.to V.length) lst
-  _                    -> handleEvent ev lst
+  _                    -> handleListEvent ev lst
 
 -- | Replace the contents of a list with a new set of elements but preserve the
 -- currently selected index.
@@ -36,7 +36,7 @@ handleHJKLEvent ev lst = case ev of
 --
 -- listReplace itself is broken as of brick-0.2 due to a bogus implementation of
 -- the `merge` function.
-listSimpleReplace :: Eq e => V.Vector e -> List e -> List e
+listSimpleReplace :: Eq e => V.Vector e -> List n e -> List n e
 listSimpleReplace elems oldList =
   let selected = flip V.elemIndex elems . snd =<< listSelectedElement oldList
       newSelected = if V.null elems

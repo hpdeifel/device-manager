@@ -25,11 +25,11 @@ import Data.Maybe
 import Text.Printf
 import Data.List
 
-newDeviceList :: Name -> [Device] -> List Device
+newDeviceList :: n -> [Device] -> List n Device
 newDeviceList name devs = list name (V.fromList devs) itemHeight
   where itemHeight = 1
 
-renderDeviceList :: List Device -> Widget
+renderDeviceList :: (Ord n, Show n) => List n Device -> Widget n
 renderDeviceList lst = Widget Fixed Greedy $ do
   let devs = listElements lst
 
@@ -62,11 +62,11 @@ renderDeviceList lst = Widget Fixed Greedy $ do
              <+> hFix fileWidth (txt "File")
              <+> hFix mountPointWidth (txt "Mount Point")
 
-  render $ renderHeader <=> hBorder <=> renderList lst renderRow
+  render $ renderHeader <=> hBorder <=> renderList renderRow True lst
 
 -- We substract 1 from the width, to guarantee at least one character of space
 -- between two columns.
-hFix :: Int -> Widget -> Widget
+hFix :: Int -> Widget n -> Widget n
 hFix width = (<+> txt " ") -- Add space for column separation
            . hLimit (positive $ width-1) -- Limit original widget to (width-1) chars
            . padRight Max -- Expand original widget infinitly to the right

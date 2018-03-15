@@ -8,6 +8,7 @@ import Brick.Widgets.DeviceList
 import Brick.Widgets.Border
 import Brick.Widgets.HelpMessage
 import Brick.Widgets.WrappedText
+import Brick.BChan
 import Graphics.Vty hiding (Event, nextEvent,(<|>))
 import qualified Graphics.Vty as Vty
 
@@ -20,8 +21,7 @@ import Data.Text (Text)
 import System.Exit
 import System.IO
 import Control.Monad
-import Control.Concurrent
-import Data.Default
+import Control.Concurrent (forkIO)
 import Data.Monoid
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Maybe
@@ -34,14 +34,11 @@ import Control.Applicative
 import System.Process
 
 data AppState = AppState {
-  devList :: List Device,
+  devList :: List String Device,
   message :: Text,
   shownHelp :: Maybe KeyBindings,
   connection :: Connection
 }
-
-data AppEvent = DBusEvent Event
-              | VtyEvent Vty.Event
 
 helpMsg :: KeyBindings
 helpMsg = KeyBindings
@@ -63,7 +60,7 @@ helpMsg = KeyBindings
      [ ("t", "Toggle display of system devices") ])
   ]
 
-draw :: AppState -> [Widget]
+draw :: AppState -> [Widget String]
 draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
   where w =     renderDeviceList dl
             <=> hBorder
@@ -71,19 +68,19 @@ draw (AppState dl msg dia _) = maybeToList dia' ++ [w]
 
         dia' = help <$> dia
 
-handler :: AppState -> AppEvent -> EventM (Next AppState)
+handler :: AppState -> BrickEvent String Event -> EventM String (Next AppState)
 handler appState@AppState{..} e = case e of
   VtyEvent e'@(EvKey _ _) ->
     handleKey e' (clearMessage appState) -- clear message on every keystroke
   VtyEvent _ -> continue appState
-  DBusEvent (DeviceAdded dev) ->
+  AppEvent (DeviceAdded dev) ->
     continueWith $ onList (listAppend dev)
-  DBusEvent (DeviceRemoved dev) ->
+  AppEvent (DeviceRemoved dev) ->
     continueWith $ onList (listRemoveEq dev)
-  DBusEvent (DeviceChanged old new) ->
+  AppEvent (DeviceChanged old new) ->
     continueWith $ onList (listSwap old new)
 
-  where continueWith :: (AppState -> AppState) -> EventM (Next AppState)
+  where continueWith :: (AppState -> AppState) -> EventM String (Next AppState)
         continueWith f = continue (f appState)
 
         handleKey (EvKey (KChar 'q') []) as = halt as
@@ -108,7 +105,7 @@ handler appState@AppState{..} e = case e of
           continue $ as { devList = lst' }
 
         handleDialogKey _ (EvKey KEsc []) as = continue (hideHelp as)
-        handleDialogKey b ev as = void (handleEvent ev b) >> continue as
+        handleDialogKey b ev as = void (handleKeyBindingsEvent ev b) >> continue as
 
 theme :: AttrMap
 theme = attrMap defAttr
@@ -133,20 +130,19 @@ main = do
             , appHandleEvent = handler
             , appStartEvent = return
             , appAttrMap = const theme
-            , appLiftVtyEvent = VtyEvent
             }
 
-  eventChan <- newChan
+  eventChan <- newBChan 100
 
   void $ forkIO $ eventThread con eventChan
 
-  void $ customMain (mkVty def) eventChan app $
+  void $ customMain (userConfig >>= mkVty) (Just eventChan) app $
     AppState devList "Welcome! Press '?' to get help." Nothing con
 
-eventThread :: Connection -> Chan AppEvent -> IO ()
+eventThread :: Connection -> BChan Event -> IO ()
 eventThread con chan = forever $ do
   ev <- nextEvent con
-  writeChan chan (DBusEvent ev)
+  writeBChan chan ev
 
 ----------------------------------------------------------------------
 -- Actions
@@ -236,7 +232,7 @@ getUserShell =
           Right res -> return (Just res)
 
 -- not onLisp!
-onList :: (List Device -> List Device) -> AppState -> AppState
+onList :: (List String Device -> List String Device) -> AppState -> AppState
 onList f appState = appState { devList = f (devList appState)}
 
 withSelected :: (Device -> AppState -> IO AppState) -> AppState -> IO AppState
